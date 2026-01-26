@@ -1,0 +1,60 @@
+# ========================
+# Python / Django (backend)
+# ========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+*.so
+*.dylib
+venv/
+env/
+.venv/
+.env
+db.sqlite3
+db.sqlite3-journal
+*.log
+media/
+staticfiles/
+backend/ml_models/*.pkl
+backend/ml_models/*.joblib
+backend/data/*.csv
+
+# ========================
+# Node / React (frontend)
+# ========================
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+.vite/
+
+# ========================
+# IDEs e editores
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ========================
+# Docker
+# ========================
+docker-compose.override.yml
+
+# ========================
+# Claude Code
+# ========================
+.claude/
+
+# ========================
+# OS
+# ========================
+*.tmp
+*.bak
