@@ -1,13 +1,16 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Swords, GitCompare, BarChart3, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, Swords, GitCompare, Crosshair, Shield, Radio, BarChart3, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/live', label: 'Ao Vivo', icon: Radio },
   { path: '/teams', label: 'Times', icon: Users },
   { path: '/matches', label: 'Partidas', icon: Swords },
   { path: '/compare', label: 'Comparar', icon: GitCompare },
+  { path: '/draft', label: 'Draft', icon: Crosshair },
+  { path: '/matchups', label: 'Matchups', icon: Shield },
 ];
 
 export function Sidebar() {

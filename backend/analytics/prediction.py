@@ -380,6 +380,234 @@ def clear_model_cache():
     _model_cache.clear()
 
 
+def compute_champion_aggregate_stats(champion: str, position: str) -> dict | None:
+    """Aggregate historical stats for a champion in a given position.
+
+    Args:
+        champion: Champion name (e.g., 'Ahri').
+        position: Role (top, jng, mid, bot, sup).
+
+    Returns:
+        Dict with aggregated stats, or None if fewer than 3 games found.
+    """
+    from .models import PlayerMatchStats, TeamMatchStats
+
+    qs = PlayerMatchStats.objects.filter(
+        champion=champion,
+        position__iexact=position,
+    )
+
+    total = qs.count()
+    if total < 3:
+        return None
+
+    agg = qs.aggregate(
+        avg_kda=Avg("kda"),
+        avg_kills=Avg("kills"),
+        avg_deaths=Avg("deaths"),
+        avg_gold_per_min=Avg("gold_per_min"),
+        avg_damage_per_min=Avg("damage_per_min"),
+        avg_cs_per_min=Avg("cs_per_min"),
+    )
+
+    # Compute win rate by checking TeamMatchStats for each appearance
+    match_team_pairs = list(qs.values_list("match_id", "team_id"))
+    match_ids = [mt[0] for mt in match_team_pairs]
+    team_ids = [mt[1] for mt in match_team_pairs]
+
+    # Bulk fetch relevant TeamMatchStats
+    ts_qs = TeamMatchStats.objects.filter(
+        match_id__in=match_ids, is_winner=True
+    ).values_list("match_id", "team_id")
+    winner_set = set((mid, tid) for mid, tid in ts_qs)
+
+    wins = sum(1 for mt in match_team_pairs if (mt[0], mt[1]) in winner_set)
+
+    return {
+        "win_rate": wins / total if total > 0 else 0.0,
+        "avg_kda": agg["avg_kda"] or 0.0,
+        "avg_kills": float(agg["avg_kills"] or 0),
+        "avg_deaths": float(agg["avg_deaths"] or 0),
+        "avg_gold_per_min": agg["avg_gold_per_min"] or 0.0,
+        "avg_damage_per_min": agg["avg_damage_per_min"] or 0.0,
+        "avg_cs_per_min": agg["avg_cs_per_min"] or 0.0,
+        "games_played": float(total),
+    }
+
+
+def build_draft_features(
+    draft: dict,
+    blue_team_id: int | None = None,
+    red_team_id: int | None = None,
+) -> np.ndarray | None:
+    """Build feature vector from a 10-champion draft + optional team context.
+
+    Returns 80 champion features. When both team IDs are provided and have
+    sufficient history, appends 106 team-context features (rolling stats,
+    ELO, H2H, per-position stats) — otherwise pads with zeros so the vector
+    size always matches the trained model.
+
+    Args:
+        draft: Dict with keys like 'blue_top' ... 'red_sup'.
+        blue_team_id: Optional database ID of the blue-side team.
+        red_team_id: Optional database ID of the red-side team.
+
+    Returns:
+        numpy array of shape (1, 186), or None if any champion lacks data.
+    """
+    positions = ["top", "jng", "mid", "bot", "sup"]
+    features: list[float] = []
+
+    # 80 champion features
+    for side in ["blue", "red"]:
+        for pos in positions:
+            champion = draft[f"{side}_{pos}"]
+            stats = compute_champion_aggregate_stats(champion, pos)
+            if stats is None:
+                return None
+            features.extend([
+                stats["win_rate"],
+                stats["avg_kda"],
+                stats["avg_kills"],
+                stats["avg_deaths"],
+                stats["avg_gold_per_min"],
+                stats["avg_damage_per_min"],
+                stats["avg_cs_per_min"],
+                stats["games_played"],
+            ])
+
+    # 106 team-context features
+    NUM_TEAM_FEATURES = 106
+    team_ctx: list[float] | None = None
+
+    if blue_team_id is not None and red_team_id is not None:
+        f1 = compute_team_features(blue_team_id)
+        f2 = compute_team_features(red_team_id)
+
+        if f1 is not None and f2 is not None:
+            h2h = compute_h2h_features(blue_team_id, red_team_id)
+
+            feature_keys = [
+                "win_rate", "avg_kills", "avg_deaths", "avg_towers", "avg_dragons",
+                "avg_barons", "avg_inhibitors", "first_blood_rate", "first_tower_rate",
+                "first_dragon_rate", "first_herald_rate", "avg_golddiffat10",
+                "avg_golddiffat15", "avg_game_length",
+                "win_rate_last3", "win_rate_last5", "streak", "blue_win_rate", "red_win_rate",
+            ]
+            t1_vals = [f1[k] for k in feature_keys]
+            t2_vals = [f2[k] for k in feature_keys]
+
+            diff_keys = [
+                "win_rate", "avg_kills", "avg_towers", "avg_dragons",
+                "avg_golddiffat10", "avg_golddiffat15",
+                "win_rate_last3", "win_rate_last5", "streak",
+            ]
+            diff_vals = [f1[k] - f2[k] for k in diff_keys]
+
+            h2h_vals = [h2h["win_rate_vs"], h2h["total_games_vs"], h2h["recent_form_vs"]]
+
+            t1_elo = get_team_elo(blue_team_id)
+            t2_elo = get_team_elo(red_team_id)
+            elo_vals = [
+                t1_elo["global"], t2_elo["global"], t1_elo["global"] - t2_elo["global"],
+                t1_elo["blue"], t2_elo["red"], t1_elo["blue"] - t2_elo["red"],
+            ]
+
+            pos_feature_keys = [
+                f"pos_{pos}_avg_{stat}" for pos in POSITIONS for stat in POSITION_STATS
+            ]
+            t1_pos = [f1[k] for k in pos_feature_keys]
+            t2_pos = [f2[k] for k in pos_feature_keys]
+
+            team_ctx = t1_vals + t2_vals + diff_vals + h2h_vals + elo_vals + t1_pos + t2_pos
+
+    if team_ctx is None:
+        team_ctx = [0.0] * NUM_TEAM_FEATURES
+
+    features.extend(team_ctx)
+    return np.array(features).reshape(1, -1)
+
+
+def predict_draft(
+    draft: dict,
+    blue_team_id: int | None = None,
+    red_team_id: int | None = None,
+) -> dict:
+    """Predict match stats from a 10-champion draft + optional team context.
+
+    Args:
+        draft: Dict with keys 'blue_top' through 'red_sup'.
+        blue_team_id: Optional blue-side team ID for team-context features.
+        red_team_id: Optional red-side team ID for team-context features.
+
+    Returns:
+        Dict with predictions or error information.
+    """
+    features = build_draft_features(draft, blue_team_id, red_team_id)
+    if features is None:
+        return {
+            "predictions": None,
+            "features_available": False,
+            "models_loaded": False,
+            "message": "One or more champions lack sufficient data (minimum 3 games in that position).",
+        }
+
+    has_teams = blue_team_id is not None and red_team_id is not None
+
+    model_names = [
+        "draft_winner",
+        "draft_total_kills",
+        "draft_total_towers",
+        "draft_total_dragons",
+        "draft_total_barons",
+    ]
+    models = {}
+    all_loaded = True
+    for name in model_names:
+        m = load_model(name)
+        if m is None:
+            all_loaded = False
+        models[name] = m
+
+    if not all_loaded:
+        return {
+            "predictions": None,
+            "features_available": True,
+            "models_loaded": False,
+            "message": "Draft models not trained. Run: python manage.py train_draft_model",
+        }
+
+    # Win probability
+    win_probs = models["draft_winner"].predict_proba(features)[0]
+    blue_win_prob = round(float(win_probs[1]) * 100, 1)
+    red_win_prob = round(float(win_probs[0]) * 100, 1)
+
+    total_kills = round(float(models["draft_total_kills"].predict(features)[0]), 1)
+    total_towers = round(float(models["draft_total_towers"].predict(features)[0]), 1)
+    total_dragons = round(float(models["draft_total_dragons"].predict(features)[0]), 1)
+    total_barons = round(float(models["draft_total_barons"].predict(features)[0]), 1)
+
+    # Clamp to reasonable ranges
+    total_kills = max(0, total_kills)
+    total_towers = max(0, min(22, total_towers))
+    total_dragons = max(0, min(12, total_dragons))
+    total_barons = max(0, min(6, total_barons))
+
+    return {
+        "predictions": {
+            "blue_win_prob": blue_win_prob,
+            "red_win_prob": red_win_prob,
+            "total_kills": total_kills,
+            "total_towers": total_towers,
+            "total_dragons": total_dragons,
+            "total_barons": total_barons,
+        },
+        "features_available": True,
+        "models_loaded": True,
+        "teams_provided": has_teams,
+    }
+
+
 def predict_match(team1_id: int, team2_id: int, league_id: int | None = None) -> dict:
     """Predict the outcome of a match between two teams.
 

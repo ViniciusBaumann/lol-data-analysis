@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   GitCompare,
   Search,
@@ -33,7 +33,7 @@ import { cn } from '@/lib/utils';
 interface StatTabConfig {
   key: string;
   label: string;
-  type: 'rate' | 'avg' | 'duration';
+  type: 'rate' | 'avg' | 'duration' | 'diff';
   rateField: keyof CompareTeamRates;
   matchField: keyof CompareMatchDetail | keyof CompareFaceoffMatchTeam;
 }
@@ -49,6 +49,8 @@ const STAT_TABS: StatTabConfig[] = [
   { key: 'avg_dragons', label: 'Total Dragons', type: 'avg', rateField: 'avg_dragons', matchField: 'dragons' },
   { key: 'avg_barons', label: 'Total Nashors', type: 'avg', rateField: 'avg_barons', matchField: 'barons' },
   { key: 'avg_game_length', label: 'Game Time', type: 'duration', rateField: 'avg_game_length', matchField: 'game_length' },
+  { key: 'kill_handicap', label: 'Kill Handicap', type: 'diff', rateField: 'avg_kill_diff', matchField: 'kill_diff' },
+  { key: 'tower_handicap', label: 'Tower Handicap', type: 'diff', rateField: 'avg_tower_diff', matchField: 'tower_diff' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -74,6 +76,12 @@ function formatDuration(minutes: number | null | undefined): string {
   return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
+function formatDiff(val: number): string {
+  if (val > 0) return `+${val.toFixed(1)}`;
+  if (val < 0) return val.toFixed(1);
+  return '0.0';
+}
+
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '--';
   try {
@@ -92,6 +100,7 @@ function getStatValue(rates: CompareTeamRates, tab: StatTabConfig): string {
   if (val === null || val === undefined) return '--';
   if (tab.type === 'rate') return `${val}%`;
   if (tab.type === 'duration') return formatDuration(val as number);
+  if (tab.type === 'diff') return formatDiff(val as number);
   return String(val);
 }
 
@@ -105,6 +114,10 @@ function getMatchValue(
   }
   if (tab.type === 'duration') {
     return { display: formatDuration(val as number | null), success: null };
+  }
+  if (tab.type === 'diff') {
+    const n = val as number;
+    return { display: formatDiff(n), success: null };
   }
   return { display: String(val ?? '--'), success: null };
 }
@@ -294,7 +307,7 @@ function RateBar({
   team2Value: number | null;
   team1Name: string;
   team2Name: string;
-  type: 'rate' | 'avg' | 'duration';
+  type: 'rate' | 'avg' | 'duration' | 'diff';
 }) {
   const v1 = team1Value ?? 0;
   const v2 = team2Value ?? 0;
@@ -336,11 +349,11 @@ function RateBar({
     );
   }
 
-  // avg or duration
+  // avg, duration, or diff
   const t1Better = type === 'duration' ? v1 < v2 && v1 > 0 : v1 > v2;
   const t2Better = type === 'duration' ? v2 < v1 && v2 > 0 : v2 > v1;
-  const displayV1 = type === 'duration' ? formatDuration(v1) : v1.toFixed(1);
-  const displayV2 = type === 'duration' ? formatDuration(v2) : v2.toFixed(1);
+  const displayV1 = type === 'duration' ? formatDuration(v1) : type === 'diff' ? formatDiff(v1) : v1.toFixed(1);
+  const displayV2 = type === 'duration' ? formatDuration(v2) : type === 'diff' ? formatDiff(v2) : v2.toFixed(1);
 
   return (
     <div className="space-y-2">
@@ -467,11 +480,13 @@ function PredictionBadge({
   type,
 }: {
   value: number;
-  type: 'rate' | 'avg' | 'duration';
+  type: 'rate' | 'avg' | 'duration' | 'diff';
 }) {
   const display = type === 'duration'
     ? formatDuration(value)
-    : value.toFixed(1);
+    : type === 'diff'
+      ? formatDiff(value)
+      : value.toFixed(1);
 
   return (
     <div className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 mb-4">
@@ -650,6 +665,7 @@ function PredictionCard({
 
 export default function ComparePage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [team1, setTeam1] = useState<Team | null>(null);
   const [team2, setTeam2] = useState<Team | null>(null);
   const [activeTab, setActiveTab] = useState('win_rate');
@@ -1094,34 +1110,53 @@ export default function ComparePage() {
                             fm.team2 as unknown as Record<string, unknown>,
                             currentTab
                           );
+                          const t1Won = fm.team1.is_winner;
+                          const t2Won = fm.team2.is_winner;
                           return (
                             <div
                               key={fm.match_id}
-                              className="grid grid-cols-[1fr_auto_1fr] gap-2 py-1.5 border-b border-border/30 items-center"
+                              onClick={() => navigate(`/matches/${fm.match_id}`)}
+                              className="grid grid-cols-[1fr_auto_1fr] gap-2 py-2 border-b border-border/30 items-center cursor-pointer hover:bg-secondary/40 transition-colors rounded"
                             >
                               {/* Team 1 */}
-                              <div className="flex items-center justify-center gap-1.5">
+                              <div className="flex flex-col items-center gap-1">
                                 {currentTab.type === 'rate' ? (
                                   <MatchIcon success={r1.success} />
                                 ) : (
-                                  <span className="text-xs font-medium text-foreground">
+                                  <span className="text-xs font-bold text-foreground">
                                     {r1.display}
                                   </span>
                                 )}
+                                <span className={cn(
+                                  'text-[8px] font-bold px-1.5 py-px rounded',
+                                  t1Won
+                                    ? 'bg-green-500/20 text-green-400'
+                                    : 'bg-red-500/15 text-red-400/60'
+                                )}>
+                                  {t1Won ? 'WIN' : 'LOSS'}
+                                </span>
                               </div>
                               {/* Date */}
                               <span className="text-[10px] text-muted-foreground w-16 text-center">
                                 {formatDate(fm.date)}
                               </span>
                               {/* Team 2 */}
-                              <div className="flex items-center justify-center gap-1.5">
+                              <div className="flex flex-col items-center gap-1">
                                 {currentTab.type === 'rate' ? (
                                   <MatchIcon success={r2.success} />
                                 ) : (
-                                  <span className="text-xs font-medium text-foreground">
+                                  <span className="text-xs font-bold text-foreground">
                                     {r2.display}
                                   </span>
                                 )}
+                                <span className={cn(
+                                  'text-[8px] font-bold px-1.5 py-px rounded',
+                                  t2Won
+                                    ? 'bg-green-500/20 text-green-400'
+                                    : 'bg-red-500/15 text-red-400/60'
+                                )}>
+                                  {t2Won ? 'WIN' : 'LOSS'}
+                                </span>
                               </div>
                             </div>
                           );

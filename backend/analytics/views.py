@@ -1,9 +1,10 @@
 import logging
 from collections import defaultdict
+from itertools import combinations
 
 import requests as http_requests
 from django.core.management import call_command
-from django.db.models import Avg, Count, IntegerField, Q, Sum
+from django.db.models import Avg, Count, F, IntegerField, Q, Sum
 from django.db.models.functions import Cast
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -523,6 +524,8 @@ class CompareView(APIView):
                 "avg_barons": 0.0,
                 "avg_inhibitors": 0.0,
                 "avg_game_length": None,
+                "avg_kill_diff": 0.0,
+                "avg_tower_diff": 0.0,
                 "side_stats": {"blue": dict(_empty_side), "red": dict(_empty_side)},
             }
 
@@ -549,20 +552,30 @@ class CompareView(APIView):
         )["avg"]
 
         # Most kills rate: % of matches where team had more kills than opponent
+        # Also compute per-match kill/tower differentials for handicap stats
         all_match_stats = (
             TeamMatchStats.objects.filter(match_id__in=match_ids)
-            .values("match_id", "team_id", "kills")
+            .values("match_id", "team_id", "kills", "towers")
         )
         kills_by_match = defaultdict(dict)
+        towers_by_match = defaultdict(dict)
         for s in all_match_stats:
             kills_by_match[s["match_id"]][s["team_id"]] = s["kills"]
+            towers_by_match[s["match_id"]][s["team_id"]] = s["towers"]
 
         most_kills_count = 0
+        total_kill_diff = 0.0
+        total_tower_diff = 0.0
         for mid, teams_data in kills_by_match.items():
             team_k = teams_data.get(team.id, 0)
             opp_k = sum(v for tid, v in teams_data.items() if tid != team.id)
             if team_k > opp_k:
                 most_kills_count += 1
+            total_kill_diff += team_k - opp_k
+            t_data = towers_by_match.get(mid, {})
+            team_t = t_data.get(team.id, 0)
+            opp_t = sum(v for tid, v in t_data.items() if tid != team.id)
+            total_tower_diff += team_t - opp_t
 
         def _rate(count):
             if not count:
@@ -609,12 +622,16 @@ class CompareView(APIView):
             "avg_barons": round(agg["avg_barons"] or 0, 1),
             "avg_inhibitors": round(agg["avg_inhibitors"] or 0, 1),
             "avg_game_length": round(avg_gl, 1) if avg_gl else None,
+            "avg_kill_diff": round(total_kill_diff / total, 1),
+            "avg_tower_diff": round(total_tower_diff / total, 1),
             "side_stats": side_stats,
         }
 
     def _build_match_detail(self, stat, match, opponent_name, opp_stat):
         """Build per-match detail dict from a TeamMatchStats instance."""
-        most_kills = stat.kills > (opp_stat.kills if opp_stat else 0)
+        opp_kills = opp_stat.kills if opp_stat else 0
+        opp_towers = opp_stat.towers if opp_stat else 0
+        most_kills = stat.kills > opp_kills
         return {
             "match_id": match.id,
             "date": match.date.isoformat() if match.date else None,
@@ -634,6 +651,8 @@ class CompareView(APIView):
             "barons": stat.barons,
             "inhibitors": stat.inhibitors,
             "game_length": match.game_length,
+            "kill_diff": stat.kills - opp_kills,
+            "tower_diff": stat.towers - opp_towers,
         }
 
     def _build_recent(self, team, year):
@@ -835,6 +854,8 @@ class CompareView(APIView):
                             "barons": t1_stat.barons,
                             "inhibitors": t1_stat.inhibitors,
                             "game_length": match.game_length,
+                            "kill_diff": t1_stat.kills - t2_stat.kills,
+                            "tower_diff": t1_stat.towers - t2_stat.towers,
                         },
                         "team2": {
                             "is_winner": t2_stat.is_winner,
@@ -851,6 +872,8 @@ class CompareView(APIView):
                             "barons": t2_stat.barons,
                             "inhibitors": t2_stat.inhibitors,
                             "game_length": match.game_length,
+                            "kill_diff": t2_stat.kills - t1_stat.kills,
+                            "tower_diff": t2_stat.towers - t1_stat.towers,
                         },
                     }
                 )
@@ -1211,6 +1234,402 @@ class PredictView(APIView):
             return Response(result, status=status.HTTP_404_NOT_FOUND)
 
         return Response(result)
+
+
+class ChampionListView(APIView):
+    """API view returning a list of unique champions with aggregated stats."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        """Return champions with aggregated stats.
+
+        Query params:
+            position: Optional position filter (top, jng, mid, bot, sup).
+            search: Optional champion name search (icontains).
+        """
+        position = request.query_params.get("position")
+        search = request.query_params.get("search")
+
+        qs = PlayerMatchStats.objects.all()
+        if position:
+            qs = qs.filter(position__iexact=position)
+        if search:
+            qs = qs.filter(champion__icontains=search)
+
+        champ_agg = (
+            qs.values("champion")
+            .annotate(
+                games=Count("id"),
+                total_wins=Sum(
+                    Cast("match__team_stats__is_winner", IntegerField()),
+                    filter=Q(
+                        match__team_stats__team_id=F("team_id"),
+                    ),
+                ),
+                avg_kills=Avg("kills"),
+                avg_deaths=Avg("deaths"),
+                avg_assists=Avg("assists"),
+                avg_kda=Avg("kda"),
+                avg_cs_per_min=Avg("cs_per_min"),
+                avg_gold_per_min=Avg("gold_per_min"),
+                avg_damage_per_min=Avg("damage_per_min"),
+            )
+            .filter(games__gte=1)
+            .order_by("-games")
+        )
+
+        # Build position breakdown per champion
+        champ_names = [c["champion"] for c in champ_agg]
+        pos_qs = (
+            PlayerMatchStats.objects.filter(champion__in=champ_names)
+            .values("champion", "position")
+            .annotate(games=Count("id"))
+            .order_by("-games")
+        )
+        pos_map = defaultdict(list)
+        for entry in pos_qs:
+            pos_map[entry["champion"]].append(
+                {"position": entry["position"], "games": entry["games"]}
+            )
+
+        results = []
+        for c in champ_agg:
+            games = c["games"]
+            total_wins = c["total_wins"] or 0
+            win_rate = round((total_wins / games) * 100, 1) if games > 0 else 0.0
+            results.append(
+                {
+                    "champion": c["champion"],
+                    "games": games,
+                    "win_rate": win_rate,
+                    "avg_kills": round(c["avg_kills"] or 0, 1),
+                    "avg_deaths": round(c["avg_deaths"] or 0, 1),
+                    "avg_assists": round(c["avg_assists"] or 0, 1),
+                    "avg_kda": round(c["avg_kda"] or 0, 2),
+                    "avg_cs_per_min": round(c["avg_cs_per_min"] or 0, 1),
+                    "avg_gold_per_min": round(c["avg_gold_per_min"] or 0, 1),
+                    "avg_damage_per_min": round(c["avg_damage_per_min"] or 0, 1),
+                    "positions": pos_map.get(c["champion"], []),
+                }
+            )
+
+        return Response(results)
+
+
+class DraftPredictView(APIView):
+    """API view to predict draft-based match stats (kills, towers, dragons, barons, win prob)."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        """Return predictions for a 10-champion draft + optional team context.
+
+        Request body:
+            blue_top, blue_jng, blue_mid, blue_bot, blue_sup: str (required)
+            red_top, red_jng, red_mid, red_bot, red_sup: str (required)
+            blue_team: int (optional) - blue side team ID
+            red_team: int (optional) - red side team ID
+        """
+        from .prediction import predict_draft
+
+        slots = [
+            "blue_top", "blue_jng", "blue_mid", "blue_bot", "blue_sup",
+            "red_top", "red_jng", "red_mid", "red_bot", "red_sup",
+        ]
+
+        draft = {}
+        for slot in slots:
+            val = request.data.get(slot)
+            if not val or not isinstance(val, str) or not val.strip():
+                return Response(
+                    {"error": f"Missing or invalid value for '{slot}'."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            draft[slot] = val.strip()
+
+        # Optional team IDs
+        blue_team_id = request.data.get("blue_team")
+        red_team_id = request.data.get("red_team")
+        if blue_team_id is not None:
+            try:
+                blue_team_id = int(blue_team_id)
+            except (ValueError, TypeError):
+                blue_team_id = None
+        if red_team_id is not None:
+            try:
+                red_team_id = int(red_team_id)
+            except (ValueError, TypeError):
+                red_team_id = None
+
+        result = predict_draft(draft, blue_team_id=blue_team_id, red_team_id=red_team_id)
+
+        if "error" in result:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(result)
+
+
+class ChampionMatchupsView(APIView):
+    """API view returning champion matchup, synergy, and duo statistics."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        """Return champion matchup / synergy / duo data.
+
+        Query params:
+            mode (required): 'direct' | 'indirect' | 'synergy' | 'duos'
+            champion (required for direct/indirect/synergy): champion name
+            position (required for direct/indirect/synergy): top/jng/mid/bot/sup
+            target_position (optional, for indirect/synergy): filter other champ's position
+            min_games (optional, default 3): minimum games threshold
+        """
+        mode = request.query_params.get("mode")
+        champion = request.query_params.get("champion", "")
+        position = request.query_params.get("position", "")
+        target_position = request.query_params.get("target_position", "")
+        min_games = int(request.query_params.get("min_games", 3))
+
+        valid_modes = ("direct", "indirect", "synergy", "duos")
+        if not mode or mode not in valid_modes:
+            return Response(
+                {"error": f"'mode' is required and must be one of {valid_modes}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if mode != "duos" and (not champion or not position):
+            return Response(
+                {"error": "'champion' and 'position' are required for this mode."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if mode == "duos":
+            return self._duos(min_games)
+
+        # Find all matches where the champion played in the given position
+        my_pms = PlayerMatchStats.objects.filter(
+            champion__iexact=champion, position__iexact=position
+        ).select_related("match")
+
+        my_matches_dict = {pms.match_id: pms.team_id for pms in my_pms}
+        match_ids = list(my_matches_dict.keys())
+
+        if not match_ids:
+            return Response({
+                "champion": champion,
+                "position": position,
+                "mode": mode,
+                "results": [],
+            })
+
+        # Pre-load winner info for all relevant matches
+        winner_map = dict(
+            Match.objects.filter(id__in=match_ids).values_list("id", "winner_id")
+        )
+
+        if mode == "direct":
+            results = self._direct(match_ids, my_matches_dict, winner_map, position, champion, min_games)
+        elif mode == "indirect":
+            results = self._indirect(match_ids, my_matches_dict, winner_map, position, champion, target_position, min_games)
+        else:  # synergy
+            results = self._synergy(match_ids, my_matches_dict, winner_map, position, champion, target_position, min_games)
+
+        return Response({
+            "champion": champion,
+            "position": position,
+            "mode": mode,
+            "results": results,
+        })
+
+    def _direct(self, match_ids, my_matches_dict, winner_map, position, champion, min_games):
+        """Direct matchup: same position, opposite team."""
+        opponent_pms = PlayerMatchStats.objects.filter(
+            match_id__in=match_ids, position__iexact=position
+        ).exclude(champion__iexact=champion)
+
+        agg = defaultdict(lambda: {"games": 0, "wins": 0})
+        for opp in opponent_pms:
+            my_team = my_matches_dict.get(opp.match_id)
+            if my_team is None or opp.team_id == my_team:
+                continue
+            won = winner_map.get(opp.match_id) == my_team
+            agg[opp.champion]["games"] += 1
+            if won:
+                agg[opp.champion]["wins"] += 1
+
+        return self._format_results(agg, position, min_games)
+
+    def _indirect(self, match_ids, my_matches_dict, winner_map, position, champion, target_position, min_games):
+        """Indirect matchup: different position, opposite team."""
+        qs = PlayerMatchStats.objects.filter(match_id__in=match_ids).exclude(
+            champion__iexact=champion
+        )
+        if target_position:
+            qs = qs.filter(position__iexact=target_position)
+        else:
+            qs = qs.exclude(position__iexact=position)
+
+        agg = defaultdict(lambda: {"games": 0, "wins": 0, "position": ""})
+        for pms in qs:
+            my_team = my_matches_dict.get(pms.match_id)
+            if my_team is None or pms.team_id == my_team:
+                continue
+            won = winner_map.get(pms.match_id) == my_team
+            key = (pms.champion, pms.position)
+            agg[key]["games"] += 1
+            agg[key]["position"] = pms.position
+            if won:
+                agg[key]["wins"] += 1
+
+        results = []
+        for (champ, pos), data in agg.items():
+            if data["games"] < min_games:
+                continue
+            games = data["games"]
+            wins = data["wins"]
+            results.append({
+                "champion": champ,
+                "position": pos,
+                "games": games,
+                "wins": wins,
+                "losses": games - wins,
+                "win_rate": round((wins / games) * 100, 1),
+            })
+
+        results.sort(key=lambda x: (-x["win_rate"], -x["games"]))
+        return results
+
+    def _synergy(self, match_ids, my_matches_dict, winner_map, position, champion, target_position, min_games):
+        """Synergy: different position, same team."""
+        qs = PlayerMatchStats.objects.filter(match_id__in=match_ids).exclude(
+            champion__iexact=champion
+        )
+        if target_position:
+            qs = qs.filter(position__iexact=target_position)
+        else:
+            qs = qs.exclude(position__iexact=position)
+
+        agg = defaultdict(lambda: {"games": 0, "wins": 0, "position": ""})
+        for pms in qs:
+            my_team = my_matches_dict.get(pms.match_id)
+            if my_team is None or pms.team_id != my_team:
+                continue
+            won = winner_map.get(pms.match_id) == my_team
+            key = (pms.champion, pms.position)
+            agg[key]["games"] += 1
+            agg[key]["position"] = pms.position
+            if won:
+                agg[key]["wins"] += 1
+
+        results = []
+        for (champ, pos), data in agg.items():
+            if data["games"] < min_games:
+                continue
+            games = data["games"]
+            wins = data["wins"]
+            results.append({
+                "champion": champ,
+                "position": pos,
+                "games": games,
+                "wins": wins,
+                "losses": games - wins,
+                "win_rate": round((wins / games) * 100, 1),
+            })
+
+        results.sort(key=lambda x: (-x["win_rate"], -x["games"]))
+        return results
+
+    def _duos(self, min_games):
+        """Best duo pairs: same team, highest win rate."""
+        all_pms = (
+            PlayerMatchStats.objects.all()
+            .values("match_id", "team_id", "champion", "position")
+        )
+
+        # Group by (match_id, team_id)
+        match_teams = defaultdict(list)
+        for pms in all_pms:
+            match_teams[(pms["match_id"], pms["team_id"])].append(
+                (pms["champion"], pms["position"])
+            )
+
+        # Pre-load winners
+        match_ids = set(k[0] for k in match_teams.keys())
+        winner_map = dict(
+            Match.objects.filter(id__in=match_ids).values_list("id", "winner_id")
+        )
+
+        agg = defaultdict(lambda: {"games": 0, "wins": 0})
+        for (match_id, team_id), players in match_teams.items():
+            won = winner_map.get(match_id) == team_id
+            for (c1, p1), (c2, p2) in combinations(players, 2):
+                # Canonical ordering to avoid duplicates
+                if (c1, p1) > (c2, p2):
+                    c1, p1, c2, p2 = c2, p2, c1, p1
+                key = (c1, p1, c2, p2)
+                agg[key]["games"] += 1
+                if won:
+                    agg[key]["wins"] += 1
+
+        results = []
+        for (c1, p1, c2, p2), data in agg.items():
+            if data["games"] < min_games:
+                continue
+            games = data["games"]
+            wins = data["wins"]
+            results.append({
+                "champion1": c1,
+                "position1": p1,
+                "champion2": c2,
+                "position2": p2,
+                "games": games,
+                "wins": wins,
+                "losses": games - wins,
+                "win_rate": round((wins / games) * 100, 1),
+            })
+
+        results.sort(key=lambda x: (-x["win_rate"], -x["games"]))
+        return Response({
+            "mode": "duos",
+            "results": results[:50],
+        })
+
+    def _format_results(self, agg, position, min_games):
+        """Format aggregated results for direct matchup mode."""
+        results = []
+        for champ, data in agg.items():
+            if data["games"] < min_games:
+                continue
+            games = data["games"]
+            wins = data["wins"]
+            results.append({
+                "champion": champ,
+                "position": position,
+                "games": games,
+                "wins": wins,
+                "losses": games - wins,
+                "win_rate": round((wins / games) * 100, 1),
+            })
+        results.sort(key=lambda x: (-x["win_rate"], -x["games"]))
+        return results
+
+
+class LiveGamesView(APIView):
+    """API view returning currently live LoL Esports games with picks and predictions."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from .live import get_live_games_data
+
+        try:
+            games = get_live_games_data()
+        except Exception:
+            logger.exception("Failed to fetch live games data")
+            games = []
+
+        return Response({"games": games, "count": len(games)})
 
 
 class EloRatingsView(APIView):
