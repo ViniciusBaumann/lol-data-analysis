@@ -17,4 +17,5 @@ urlpatterns = [
     path("import/", views.ImportView.as_view(), name="import-data"),
     path("predict/", views.PredictView.as_view(), name="predict"),
     path("filter-options/", views.FilterOptionsView.as_view(), name="filter-options"),
+    path("elo/", views.EloRatingsView.as_view(), name="elo-ratings"),
 ]

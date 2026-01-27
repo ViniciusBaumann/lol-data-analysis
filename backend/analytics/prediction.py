@@ -100,6 +100,36 @@ def compute_team_features(team_id: int, n: int = 10) -> dict | None:
     game_lengths = list(matches.values_list("game_length", flat=True))
     avg_game_length = sum(game_lengths) / len(game_lengths) if game_lengths else 30.0
 
+    # Recent form
+    last3 = stats_list[-3:] if len(stats_list) >= 3 else stats_list
+    last5 = stats_list[-5:] if len(stats_list) >= 5 else stats_list
+    win_rate_last3 = sum(1 for s in last3 if s.is_winner) / len(last3)
+    win_rate_last5 = sum(1 for s in last5 if s.is_winner) / len(last5)
+
+    # Win/loss streak (positive = wins, negative = losses)
+    streak = 0
+    for s in reversed(stats_list):
+        if s.is_winner:
+            if streak < 0:
+                break
+            streak += 1
+        else:
+            if streak > 0:
+                break
+            streak -= 1
+
+    # Side-specific win rates
+    blue_games = [s for s in stats_list if s.side == "Blue"]
+    red_games = [s for s in stats_list if s.side == "Red"]
+    blue_win_rate = (
+        sum(1 for s in blue_games if s.is_winner) / len(blue_games)
+        if blue_games else 0.5
+    )
+    red_win_rate = (
+        sum(1 for s in red_games if s.is_winner) / len(red_games)
+        if red_games else 0.5
+    )
+
     features = {
         "win_rate": wins / total,
         "avg_kills": avg_kills,
@@ -115,6 +145,11 @@ def compute_team_features(team_id: int, n: int = 10) -> dict | None:
         "avg_golddiffat10": avg_golddiffat10,
         "avg_golddiffat15": avg_golddiffat15,
         "avg_game_length": avg_game_length,
+        "win_rate_last3": win_rate_last3,
+        "win_rate_last5": win_rate_last5,
+        "streak": streak,
+        "blue_win_rate": blue_win_rate,
+        "red_win_rate": red_win_rate,
     }
 
     # Per-position features (25 features: 5 positions × 5 stats)
@@ -182,18 +217,52 @@ def compute_h2h_features(team1_id: int, team2_id: int) -> dict:
     }
 
 
-def build_matchup_features(team1_id: int, team2_id: int) -> np.ndarray | None:
+def get_team_elo(team_id: int, league_id: int | None = None) -> dict:
+    """Fetch the current ELO ratings (global + side) for a team from the database.
+
+    Args:
+        team_id: The database ID of the team.
+        league_id: Optional league ID to fetch league-specific ELO.
+
+    Returns:
+        Dict with 'global', 'blue', and 'red' ELO values.
+    """
+    from .models import TeamEloRating
+
+    default = {"global": 1500.0, "blue": 1500.0, "red": 1500.0}
+
+    if league_id:
+        try:
+            elo = TeamEloRating.objects.get(team_id=team_id, league_id=league_id)
+            return {"global": elo.elo_rating, "blue": elo.elo_rating_blue, "red": elo.elo_rating_red}
+        except TeamEloRating.DoesNotExist:
+            pass
+
+    # Fallback: most recent ELO for team in any league
+    elo = (
+        TeamEloRating.objects
+        .filter(team_id=team_id)
+        .order_by("-last_match_date")
+        .first()
+    )
+    if elo:
+        return {"global": elo.elo_rating, "blue": elo.elo_rating_blue, "red": elo.elo_rating_red}
+    return default
+
+
+def build_matchup_features(team1_id: int, team2_id: int, league_id: int | None = None) -> np.ndarray | None:
     """Build the full feature vector for a matchup prediction.
 
     Combines rolling averages from both teams, differential features,
-    and head-to-head features.
+    head-to-head features, and per-league ELO (global + side).
 
     Args:
-        team1_id: Database ID of team 1.
-        team2_id: Database ID of team 2.
+        team1_id: Database ID of team 1 (blue side).
+        team2_id: Database ID of team 2 (red side).
+        league_id: Optional league ID for league-specific ELO.
 
     Returns:
-        numpy array of features, or None if insufficient data.
+        numpy array of 93 features, or None if insufficient data.
     """
     f1 = compute_team_features(team1_id)
     f2 = compute_team_features(team2_id)
@@ -208,6 +277,7 @@ def build_matchup_features(team1_id: int, team2_id: int) -> np.ndarray | None:
         "avg_barons", "avg_inhibitors", "first_blood_rate", "first_tower_rate",
         "first_dragon_rate", "first_herald_rate", "avg_golddiffat10",
         "avg_golddiffat15", "avg_game_length",
+        "win_rate_last3", "win_rate_last5", "streak", "blue_win_rate", "red_win_rate",
     ]
 
     # Team 1 features
@@ -219,11 +289,20 @@ def build_matchup_features(team1_id: int, team2_id: int) -> np.ndarray | None:
     diff_keys = [
         "win_rate", "avg_kills", "avg_towers", "avg_dragons",
         "avg_golddiffat10", "avg_golddiffat15",
+        "win_rate_last3", "win_rate_last5", "streak",
     ]
     diff_features = [f1[k] - f2[k] for k in diff_keys]
 
     # H2H features
     h2h_features = [h2h["win_rate_vs"], h2h["total_games_vs"], h2h["recent_form_vs"]]
+
+    # ELO features (global + side, 6 features)
+    t1_data = get_team_elo(team1_id, league_id)
+    t2_data = get_team_elo(team2_id, league_id)
+    elo_features = [
+        t1_data["global"], t2_data["global"], t1_data["global"] - t2_data["global"],
+        t1_data["blue"], t2_data["red"], t1_data["blue"] - t2_data["red"],
+    ]
 
     # Per-position features (25 per team)
     pos_feature_keys = [
@@ -232,7 +311,7 @@ def build_matchup_features(team1_id: int, team2_id: int) -> np.ndarray | None:
     t1_pos = [f1[k] for k in pos_feature_keys]
     t2_pos = [f2[k] for k in pos_feature_keys]
 
-    all_features = t1_features + t2_features + diff_features + h2h_features + t1_pos + t2_pos
+    all_features = t1_features + t2_features + diff_features + h2h_features + elo_features + t1_pos + t2_pos
     return np.array(all_features).reshape(1, -1)
 
 
@@ -243,6 +322,7 @@ def get_feature_names() -> list[str]:
         "avg_barons", "avg_inhibitors", "first_blood_rate", "first_tower_rate",
         "first_dragon_rate", "first_herald_rate", "avg_golddiffat10",
         "avg_golddiffat15", "avg_game_length",
+        "win_rate_last3", "win_rate_last5", "streak", "blue_win_rate", "red_win_rate",
     ]
 
     names = []
@@ -253,11 +333,15 @@ def get_feature_names() -> list[str]:
     diff_keys = [
         "win_rate", "avg_kills", "avg_towers", "avg_dragons",
         "avg_golddiffat10", "avg_golddiffat15",
+        "win_rate_last3", "win_rate_last5", "streak",
     ]
     for k in diff_keys:
         names.append(f"diff_{k}")
 
     names.extend(["h2h_win_rate_vs", "h2h_total_games_vs", "h2h_recent_form_vs"])
+
+    # ELO features (global + side)
+    names.extend(["t1_elo", "t2_elo", "diff_elo", "t1_elo_side", "t2_elo_side", "diff_elo_side"])
 
     # Per-position features (25 per team, 50 total)
     for prefix in ("t1_", "t2_"):
@@ -296,12 +380,13 @@ def clear_model_cache():
     _model_cache.clear()
 
 
-def predict_match(team1_id: int, team2_id: int) -> dict:
+def predict_match(team1_id: int, team2_id: int, league_id: int | None = None) -> dict:
     """Predict the outcome of a match between two teams.
 
     Args:
-        team1_id: Database ID of team 1.
-        team2_id: Database ID of team 2.
+        team1_id: Database ID of team 1 (blue side).
+        team2_id: Database ID of team 2 (red side).
+        league_id: Optional league ID for league-specific ELO.
 
     Returns:
         Dict with prediction results and metadata.
@@ -325,7 +410,7 @@ def predict_match(team1_id: int, team2_id: int) -> dict:
         "short_name": team2.short_name or team2.name,
     }
 
-    features = build_matchup_features(team1_id, team2_id)
+    features = build_matchup_features(team1_id, team2_id, league_id=league_id)
     if features is None:
         return {
             "team1_info": team1_info,
@@ -336,7 +421,7 @@ def predict_match(team1_id: int, team2_id: int) -> dict:
             "message": "Not enough match data for one or both teams.",
         }
 
-    model_names = ["winner", "total_kills", "total_dragons", "total_towers", "game_time"]
+    model_names = ["winner", "total_kills", "total_dragons", "total_towers", "total_barons", "game_time"]
     models = {}
     all_loaded = True
     for name in model_names:
@@ -365,12 +450,14 @@ def predict_match(team1_id: int, team2_id: int) -> dict:
     total_kills = round(float(models["total_kills"].predict(features)[0]), 1)
     total_dragons = round(float(models["total_dragons"].predict(features)[0]), 1)
     total_towers = round(float(models["total_towers"].predict(features)[0]), 1)
+    total_barons = round(float(models["total_barons"].predict(features)[0]), 1)
     game_time = round(float(models["game_time"].predict(features)[0]), 1)
 
     # Clamp to reasonable ranges
     total_kills = max(0, total_kills)
     total_dragons = max(0, min(12, total_dragons))
     total_towers = max(0, min(22, total_towers))
+    total_barons = max(0, min(6, total_barons))
     game_time = max(15, min(80, game_time))
 
     return {
@@ -382,6 +469,7 @@ def predict_match(team1_id: int, team2_id: int) -> dict:
             "total_kills": total_kills,
             "total_dragons": total_dragons,
             "total_towers": total_towers,
+            "total_barons": total_barons,
             "game_time": game_time,
         },
         "features_available": True,

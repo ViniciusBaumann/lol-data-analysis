@@ -7,6 +7,7 @@ from .models import (
     Player,
     PlayerMatchStats,
     Team,
+    TeamEloRating,
     TeamMatchStats,
 )
 
@@ -56,6 +57,19 @@ class PlayerMatchStatsAdmin(admin.ModelAdmin):
     list_filter = ("position",)
     search_fields = ("player__name", "champion")
     raw_id_fields = ("match", "player", "team")
+
+
+@admin.register(TeamEloRating)
+class TeamEloRatingAdmin(admin.ModelAdmin):
+    list_display = (
+        "team", "league", "elo_rating", "elo_rating_blue", "elo_rating_red",
+        "matches_played", "last_change", "last_change_blue", "last_change_red",
+        "last_match_date",
+    )
+    list_filter = ("league", "matches_played")
+    search_fields = ("team__name", "team__short_name")
+    raw_id_fields = ("team", "league")
+    ordering = ("-elo_rating",)
 
 
 @admin.register(DataImportLog)

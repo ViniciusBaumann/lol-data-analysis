@@ -41,6 +41,15 @@ GDRIVE_FOLDER_URL: str = f"https://drive.google.com/drive/folders/{GDRIVE_FOLDER
 # Number of records per bulk_create batch.
 BATCH_SIZE: int = 500
 
+# Default leagues to import when --leagues is not specified.
+DEFAULT_LEAGUES: list[str] = ["LPL", "LCK", "CBLOL", "LCS"]
+
+# Aliases: CSV league names that should be mapped to a canonical name.
+# The alias key (uppercase) is also included in the filter automatically.
+LEAGUE_ALIASES: dict[str, str] = {
+    "LTA S": "CBLOL",
+}
+
 
 def _safe_int(value: Any, default: int = 0) -> int:
     """Convert a value to int, returning *default* when it is NaN or missing."""
@@ -140,6 +149,22 @@ class Command(BaseCommand):
             default=False,
             help="Download the CSV from Oracle's Elixir Google Drive folder.",
         )
+        parser.add_argument(
+            "--leagues",
+            nargs="*",
+            default=None,
+            help=(
+                "League names to import (case-insensitive). "
+                f"Default: {', '.join(DEFAULT_LEAGUES)}. "
+                "Use --all-leagues to import everything."
+            ),
+        )
+        parser.add_argument(
+            "--all-leagues",
+            action="store_true",
+            default=False,
+            help="Import all leagues (skip league filtering).",
+        )
 
     # --------------------------------------------------------------- handle
     def handle(self, *args: Any, **options: Any) -> None:
@@ -171,8 +196,59 @@ class Command(BaseCommand):
             status="processing",
         )
 
+        # Determine target leagues for filtering.
+        all_leagues: bool = options["all_leagues"]
+        leagues_arg: list[str] | None = options["leagues"]
+
+        if all_leagues:
+            target_leagues: list[str] | None = None
+        elif leagues_arg is not None:
+            target_leagues = [lg.upper() for lg in leagues_arg]
+        else:
+            target_leagues = [lg.upper() for lg in DEFAULT_LEAGUES]
+
+        # Expand target leagues with alias keys so the CSV filter matches them.
+        if target_leagues is not None:
+            alias_upper = {k.upper(): v for k, v in LEAGUE_ALIASES.items()}
+            for alias_key, canonical in alias_upper.items():
+                if canonical.upper() in target_leagues and alias_key not in target_leagues:
+                    target_leagues.append(alias_key)
+
         try:
             df = self._load_csv(year, file_path, download)
+
+            # Filter by league before processing.
+            if target_leagues is not None:
+                if "league" not in df.columns:
+                    raise CommandError(
+                        "CSV does not contain a 'league' column. "
+                        "Cannot filter by league."
+                    )
+                before = len(df)
+                df = df[df["league"].astype(str).str.upper().isin(target_leagues)]
+                after = len(df)
+                self.stdout.write(
+                    f"League filter ({', '.join(target_leagues)}): "
+                    f"{before} -> {after} rows "
+                    f"({before - after} rows excluded)."
+                )
+            else:
+                self.stdout.write("Importing ALL leagues (no filter).")
+
+            # Apply league name aliases (e.g. "LTA S" -> "CBLOL").
+            if "league" in df.columns and LEAGUE_ALIASES:
+                alias_map = {k: v for k, v in LEAGUE_ALIASES.items()}
+                mapped = df["league"].map(alias_map)
+                replaced = mapped.notna()
+                if replaced.any():
+                    count = replaced.sum()
+                    originals = df.loc[replaced, "league"].unique().tolist()
+                    df.loc[replaced, "league"] = mapped[replaced]
+                    self.stdout.write(
+                        f"League aliases applied: {originals} -> "
+                        f"{[alias_map[o] for o in originals]} ({count} rows remapped)."
+                    )
+
             self._import_data(df, year, import_log)
         except Exception as exc:
             import_log.status = "failed"

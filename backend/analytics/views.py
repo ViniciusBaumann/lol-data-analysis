@@ -43,6 +43,7 @@ from .models import (
     Player,
     PlayerMatchStats,
     Team,
+    TeamEloRating,
     TeamMatchStats,
 )
 from .serializers import (
@@ -502,6 +503,7 @@ class CompareView(APIView):
             Dict with total, rates, and averages.
         """
         total = qs.count()
+        _empty_side = {"total": 0, "first_blood": 0, "first_tower": 0, "first_dragon": 0, "first_baron": 0}
         if total == 0:
             return {
                 "total": 0,
@@ -521,6 +523,7 @@ class CompareView(APIView):
                 "avg_barons": 0.0,
                 "avg_inhibitors": 0.0,
                 "avg_game_length": None,
+                "side_stats": {"blue": dict(_empty_side), "red": dict(_empty_side)},
             }
 
         wins = qs.filter(is_winner=True).count()
@@ -566,6 +569,28 @@ class CompareView(APIView):
                 return 0.0
             return round((count / total) * 100, 1)
 
+        # Side-specific first-objective counts
+        side_stats = {}
+        for side_val in ("Blue", "Red"):
+            side_qs = qs.filter(side=side_val)
+            side_total = side_qs.count()
+            if side_total > 0:
+                sc = side_qs.aggregate(
+                    first_blood=Sum(Cast("first_blood", IntegerField())),
+                    first_tower=Sum(Cast("first_tower", IntegerField())),
+                    first_dragon=Sum(Cast("first_dragon", IntegerField())),
+                    first_baron=Sum(Cast("first_baron", IntegerField())),
+                )
+                side_stats[side_val.lower()] = {
+                    "total": side_total,
+                    "first_blood": sc["first_blood"] or 0,
+                    "first_tower": sc["first_tower"] or 0,
+                    "first_dragon": sc["first_dragon"] or 0,
+                    "first_baron": sc["first_baron"] or 0,
+                }
+            else:
+                side_stats[side_val.lower()] = dict(_empty_side)
+
         return {
             "total": total,
             "wins": wins,
@@ -584,6 +609,7 @@ class CompareView(APIView):
             "avg_barons": round(agg["avg_barons"] or 0, 1),
             "avg_inhibitors": round(agg["avg_inhibitors"] or 0, 1),
             "avg_game_length": round(avg_gl, 1) if avg_gl else None,
+            "side_stats": side_stats,
         }
 
     def _build_match_detail(self, stat, match, opponent_name, opp_stat):
@@ -593,6 +619,7 @@ class CompareView(APIView):
             "match_id": match.id,
             "date": match.date.isoformat() if match.date else None,
             "opponent": opponent_name,
+            "side": stat.side,
             "is_winner": stat.is_winner,
             "first_blood": stat.first_blood,
             "first_tower": stat.first_tower,
@@ -1147,8 +1174,9 @@ class PredictView(APIView):
         """Return predictions for a matchup between two teams.
 
         Query params:
-            team1 (int): ID of the first team (required).
-            team2 (int): ID of the second team (required).
+            team1 (int): ID of the first team / blue side (required).
+            team2 (int): ID of the second team / red side (required).
+            league (int): Optional league ID for league-specific ELO.
         """
         from .prediction import predict_match
 
@@ -1170,9 +1198,63 @@ class PredictView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        result = predict_match(team1_id, team2_id)
+        league_id = request.query_params.get("league")
+        if league_id:
+            try:
+                league_id = int(league_id)
+            except (TypeError, ValueError):
+                league_id = None
+
+        result = predict_match(team1_id, team2_id, league_id=league_id)
 
         if "error" in result:
             return Response(result, status=status.HTTP_404_NOT_FOUND)
 
         return Response(result)
+
+
+class EloRatingsView(APIView):
+    """API view returning ELO ratings for teams, optionally filtered by league."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        """Return ELO ratings ordered by rating descending.
+
+        Query params:
+            league (int): Optional league ID to filter by league (direct FK now).
+        """
+        league_id = request.query_params.get("league")
+
+        qs = TeamEloRating.objects.select_related("team", "league").order_by("-elo_rating")
+
+        if league_id:
+            try:
+                league_id = int(league_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {"error": "'league' must be a valid integer."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            qs = qs.filter(league_id=league_id)
+
+        ratings = []
+        for rank, elo in enumerate(qs, 1):
+            ratings.append({
+                "rank": rank,
+                "team": {
+                    "id": elo.team.id,
+                    "name": elo.team.name,
+                    "short_name": elo.team.short_name or "",
+                },
+                "elo_rating": elo.elo_rating,
+                "elo_rating_blue": elo.elo_rating_blue,
+                "elo_rating_red": elo.elo_rating_red,
+                "last_change": elo.last_change,
+                "last_change_blue": elo.last_change_blue,
+                "last_change_red": elo.last_change_red,
+                "matches_played": elo.matches_played,
+                "last_match_date": elo.last_match_date.isoformat() if elo.last_match_date else None,
+            })
+
+        return Response(ratings)

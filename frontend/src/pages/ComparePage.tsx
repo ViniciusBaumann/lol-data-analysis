@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   GitCompare,
   Search,
@@ -6,14 +7,17 @@ import {
   ChevronDown,
   Check,
   Minus,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { useCompare } from '@/hooks/useCompare';
 import { usePrediction } from '@/hooks/usePrediction';
-import { getTeams } from '@/services/teams';
+import { getTeams, getTeam } from '@/services/teams';
 import {
   Team,
+  MatchPredictions,
   PredictionResponse,
   CompareTeamRates,
+  CompareSideStats,
   CompareMatchDetail,
   CompareFaceoffMatch,
   CompareFaceoffMatchTeam,
@@ -39,17 +43,25 @@ const STAT_TABS: StatTabConfig[] = [
   { key: 'first_blood', label: 'First Blood', type: 'rate', rateField: 'first_blood_rate', matchField: 'first_blood' },
   { key: 'first_tower', label: 'First Tower', type: 'rate', rateField: 'first_tower_rate', matchField: 'first_tower' },
   { key: 'first_dragon', label: 'First Dragon', type: 'rate', rateField: 'first_dragon_rate', matchField: 'first_dragon' },
-  { key: 'first_herald', label: 'First Herald', type: 'rate', rateField: 'first_herald_rate', matchField: 'first_herald' },
   { key: 'first_baron', label: 'First Nashor', type: 'rate', rateField: 'first_baron_rate', matchField: 'first_baron' },
-  { key: 'first_inhibitor', label: 'First Inhibitor', type: 'rate', rateField: 'first_inhibitor_rate', matchField: 'first_inhibitor' },
-  { key: 'most_kills', label: 'Most Kills', type: 'rate', rateField: 'most_kills_rate', matchField: 'most_kills' },
   { key: 'avg_kills', label: 'Total Kills', type: 'avg', rateField: 'avg_kills', matchField: 'kills' },
   { key: 'avg_towers', label: 'Total Towers', type: 'avg', rateField: 'avg_towers', matchField: 'towers' },
   { key: 'avg_dragons', label: 'Total Dragons', type: 'avg', rateField: 'avg_dragons', matchField: 'dragons' },
   { key: 'avg_barons', label: 'Total Nashors', type: 'avg', rateField: 'avg_barons', matchField: 'barons' },
-  { key: 'avg_inhibitors', label: 'Total Inhibitors', type: 'avg', rateField: 'avg_inhibitors', matchField: 'inhibitors' },
   { key: 'avg_game_length', label: 'Game Time', type: 'duration', rateField: 'avg_game_length', matchField: 'game_length' },
 ];
+
+// ---------------------------------------------------------------------------
+// Tab → ML Prediction field mapping
+// ---------------------------------------------------------------------------
+
+const TAB_PREDICTION_MAP: Record<string, keyof MatchPredictions> = {
+  avg_kills: 'total_kills',
+  avg_towers: 'total_towers',
+  avg_dragons: 'total_dragons',
+  avg_barons: 'total_barons',
+  avg_game_length: 'game_time',
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -353,6 +365,74 @@ function RateBar({
 }
 
 // ---------------------------------------------------------------------------
+// Side Breakdown Bars (for "First" tabs)
+// ---------------------------------------------------------------------------
+
+const FIRST_TABS = new Set(['first_blood', 'first_tower', 'first_dragon', 'first_baron']);
+
+function SideBreakdownBars({
+  team1Stats,
+  team2Stats,
+  field,
+  team1Name,
+  team2Name,
+}: {
+  team1Stats: { blue: CompareSideStats; red: CompareSideStats };
+  team2Stats: { blue: CompareSideStats; red: CompareSideStats };
+  field: keyof CompareSideStats;
+  team1Name: string;
+  team2Name: string;
+}) {
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-3">
+      <SideBar sideStats={team1Stats} field={field} teamName={team1Name} accent="blue" />
+      <SideBar sideStats={team2Stats} field={field} teamName={team2Name} accent="red" />
+    </div>
+  );
+}
+
+function SideBar({
+  sideStats,
+  field,
+  teamName,
+  accent,
+}: {
+  sideStats: { blue: CompareSideStats; red: CompareSideStats };
+  field: keyof CompareSideStats;
+  teamName: string;
+  accent: 'blue' | 'red';
+}) {
+  const blueCount = sideStats.blue[field] as number;
+  const blueTotal = sideStats.blue.total;
+  const redCount = sideStats.red[field] as number;
+  const redTotal = sideStats.red.total;
+  const bluePct = blueTotal > 0 ? (blueCount / blueTotal) * 100 : 0;
+  const redPct = redTotal > 0 ? (redCount / redTotal) * 100 : 0;
+
+  return (
+    <div className="space-y-1">
+      <span className={cn('text-[10px] font-medium', accent === 'blue' ? 'text-blue-400' : 'text-red-400')}>
+        {teamName}
+      </span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-[9px] font-bold text-blue-400 w-8 shrink-0">BLUE</span>
+        <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
+          <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${bluePct}%` }} />
+        </div>
+        <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{blueCount}/{blueTotal}</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-[9px] font-bold text-red-400 w-8 shrink-0">RED</span>
+        <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
+          <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${redPct}%` }} />
+        </div>
+        <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{redCount}/{redTotal}</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Match Result Icon
 // ---------------------------------------------------------------------------
 
@@ -375,6 +455,32 @@ function MatchIcon({ success }: { success: boolean | null }) {
     <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-secondary text-muted-foreground">
       <Minus size={12} />
     </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Prediction Badge (inline within stat tabs)
+// ---------------------------------------------------------------------------
+
+function PredictionBadge({
+  value,
+  type,
+}: {
+  value: number;
+  type: 'rate' | 'avg' | 'duration';
+}) {
+  const display = type === 'duration'
+    ? formatDuration(value)
+    : value.toFixed(1);
+
+  return (
+    <div className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 mb-4">
+      <span className="text-sm">🔮</span>
+      <span className="text-xs text-muted-foreground uppercase font-medium">
+        ML Prediction
+      </span>
+      <span className="text-sm font-bold text-primary">{display}</span>
+    </div>
   );
 }
 
@@ -506,7 +612,7 @@ function PredictionCard({
       </div>
 
       {/* Estimated stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="bg-secondary/40 rounded-lg px-3 py-2 text-center">
           <p className="text-xs text-muted-foreground uppercase">Est. Kills</p>
           <p className="text-lg font-bold text-foreground">{preds.total_kills}</p>
@@ -518,6 +624,10 @@ function PredictionCard({
         <div className="bg-secondary/40 rounded-lg px-3 py-2 text-center">
           <p className="text-xs text-muted-foreground uppercase">Towers</p>
           <p className="text-lg font-bold text-foreground">{preds.total_towers}</p>
+        </div>
+        <div className="bg-secondary/40 rounded-lg px-3 py-2 text-center">
+          <p className="text-xs text-muted-foreground uppercase">Nashors</p>
+          <p className="text-lg font-bold text-foreground">{preds.total_barons}</p>
         </div>
         <div className="bg-secondary/40 rounded-lg px-3 py-2 text-center">
           <p className="text-xs text-muted-foreground uppercase">Game Time</p>
@@ -539,9 +649,54 @@ function PredictionCard({
 // ---------------------------------------------------------------------------
 
 export default function ComparePage() {
+  const [searchParams] = useSearchParams();
   const [team1, setTeam1] = useState<Team | null>(null);
   const [team2, setTeam2] = useState<Team | null>(null);
   const [activeTab, setActiveTab] = useState('win_rate');
+
+  // Load teams from URL params (?team1=...&team2=...)
+  useEffect(() => {
+    const t1Param = searchParams.get('team1');
+    const t2Param = searchParams.get('team2');
+    if (!t1Param && !t2Param) return;
+
+    async function loadFromParam(param: string): Promise<Team | null> {
+      const id = Number(param);
+      if (!isNaN(id) && id > 0) {
+        try {
+          return await getTeam(id);
+        } catch {
+          return null;
+        }
+      }
+      try {
+        const res = await getTeams({ search: param, page: 1 });
+        if (!res.results.length) return null;
+        // Prefer exact name/short_name match over substring match
+        const lower = param.toLowerCase();
+        const exact = res.results.find(
+          (t) =>
+            t.name.toLowerCase() === lower ||
+            t.short_name.toLowerCase() === lower
+        );
+        return exact ?? res.results[0];
+      } catch {
+        return null;
+      }
+    }
+
+    async function load() {
+      const [t1, t2] = await Promise.all([
+        t1Param ? loadFromParam(t1Param) : Promise.resolve(null),
+        t2Param ? loadFromParam(t2Param) : Promise.resolve(null),
+      ]);
+      if (t1) setTeam1(t1);
+      if (t2) setTeam2(t2);
+    }
+
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const team1Id = team1?.id ?? null;
   const team2Id = team2?.id ?? null;
@@ -563,16 +718,30 @@ export default function ComparePage() {
       </div>
 
       {/* Team Selectors */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-start">
         <TeamSelector
-          label="Time 1"
+          label="Blue Side"
           selectedTeam={team1}
           onSelect={setTeam1}
           onClear={() => setTeam1(null)}
           accentColor="blue"
         />
+
+        <div className="flex items-center justify-center md:mt-8">
+          <button
+            onClick={() => {
+              setTeam1(team2);
+              setTeam2(team1);
+            }}
+            className="p-2 rounded-full bg-secondary border border-border hover:bg-primary/20 hover:border-primary/40 transition-colors text-muted-foreground hover:text-primary"
+            title="Inverter sides"
+          >
+            <ArrowLeftRight size={18} />
+          </button>
+        </div>
+
         <TeamSelector
-          label="Time 2"
+          label="Red Side"
           selectedTeam={team2}
           onSelect={setTeam2}
           onClear={() => setTeam2(null)}
@@ -632,6 +801,14 @@ export default function ComparePage() {
                 </h3>
               </div>
               <div className="p-4 space-y-6">
+                {/* ML Prediction for this stat */}
+                {prediction?.predictions && TAB_PREDICTION_MAP[currentTab.key] && (
+                  <PredictionBadge
+                    value={prediction.predictions[TAB_PREDICTION_MAP[currentTab.key]] as number}
+                    type={currentTab.type}
+                  />
+                )}
+
                 {/* Current Split */}
                 <div>
                   <p className="text-xs text-muted-foreground uppercase mb-3 font-medium">
@@ -648,6 +825,15 @@ export default function ComparePage() {
                     <span>{data.overall.split.team1.total} games</span>
                     <span>{data.overall.split.team2.total} games</span>
                   </div>
+                  {FIRST_TABS.has(currentTab.key) && data.overall.split.team1.side_stats && data.overall.split.team2.side_stats && (
+                    <SideBreakdownBars
+                      team1Stats={data.overall.split.team1.side_stats}
+                      team2Stats={data.overall.split.team2.side_stats}
+                      field={currentTab.matchField as keyof CompareSideStats}
+                      team1Name={data.team1_info.short_name || data.team1_info.name}
+                      team2Name={data.team2_info.short_name || data.team2_info.name}
+                    />
+                  )}
                 </div>
 
                 {/* Separator */}
@@ -669,6 +855,15 @@ export default function ComparePage() {
                     <span>{data.overall.season.team1.total} games</span>
                     <span>{data.overall.season.team2.total} games</span>
                   </div>
+                  {FIRST_TABS.has(currentTab.key) && data.overall.season.team1.side_stats && data.overall.season.team2.side_stats && (
+                    <SideBreakdownBars
+                      team1Stats={data.overall.season.team1.side_stats}
+                      team2Stats={data.overall.season.team2.side_stats}
+                      field={currentTab.matchField as keyof CompareSideStats}
+                      team1Name={data.team1_info.short_name || data.team1_info.name}
+                      team2Name={data.team2_info.short_name || data.team2_info.name}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -693,6 +888,15 @@ export default function ComparePage() {
                     team2Name={data.team2_info.short_name || data.team2_info.name}
                     type={currentTab.type}
                   />
+                  {FIRST_TABS.has(currentTab.key) && data.recent.team1?.last5?.side_stats && data.recent.team2?.last5?.side_stats && (
+                    <SideBreakdownBars
+                      team1Stats={data.recent.team1.last5.side_stats}
+                      team2Stats={data.recent.team2.last5.side_stats}
+                      field={currentTab.matchField as keyof CompareSideStats}
+                      team1Name={data.team1_info.short_name || data.team1_info.name}
+                      team2Name={data.team2_info.short_name || data.team2_info.name}
+                    />
+                  )}
                 </div>
 
                 <div className="border-t border-border" />
@@ -709,6 +913,15 @@ export default function ComparePage() {
                     team2Name={data.team2_info.short_name || data.team2_info.name}
                     type={currentTab.type}
                   />
+                  {FIRST_TABS.has(currentTab.key) && data.recent.team1?.last10?.side_stats && data.recent.team2?.last10?.side_stats && (
+                    <SideBreakdownBars
+                      team1Stats={data.recent.team1.last10.side_stats}
+                      team2Stats={data.recent.team2.last10.side_stats}
+                      field={currentTab.matchField as keyof CompareSideStats}
+                      team1Name={data.team1_info.short_name || data.team1_info.name}
+                      team2Name={data.team2_info.short_name || data.team2_info.name}
+                    />
+                  )}
                 </div>
 
                 <div className="border-t border-border" />
@@ -755,12 +968,23 @@ export default function ComparePage() {
                                   {currentTab.type === 'rate' ? (
                                     <MatchIcon success={r1.success} />
                                   ) : (
-                                    <span className="text-xs font-bold text-foreground">
+                                    <span className={cn(
+                                      'text-xs font-bold',
+                                      m1!.is_winner ? 'text-green-400' : 'text-red-400'
+                                    )}>
                                       {r1.display}
                                     </span>
                                   )}
                                   <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
                                     vs {m1!.opponent}
+                                  </span>
+                                  <span className={cn(
+                                    'text-[9px] font-bold px-1 rounded',
+                                    m1!.side === 'Blue'
+                                      ? 'bg-blue-500/20 text-blue-400'
+                                      : 'bg-red-500/20 text-red-400'
+                                  )}>
+                                    {m1!.side === 'Blue' ? 'BLUE' : 'RED'}
                                   </span>
                                 </>
                               ) : (
@@ -776,12 +1000,23 @@ export default function ComparePage() {
                                   {currentTab.type === 'rate' ? (
                                     <MatchIcon success={r2.success} />
                                   ) : (
-                                    <span className="text-xs font-bold text-foreground">
+                                    <span className={cn(
+                                      'text-xs font-bold',
+                                      m2!.is_winner ? 'text-green-400' : 'text-red-400'
+                                    )}>
                                       {r2.display}
                                     </span>
                                   )}
                                   <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
                                     vs {m2!.opponent}
+                                  </span>
+                                  <span className={cn(
+                                    'text-[9px] font-bold px-1 rounded',
+                                    m2!.side === 'Blue'
+                                      ? 'bg-blue-500/20 text-blue-400'
+                                      : 'bg-red-500/20 text-red-400'
+                                  )}>
+                                    {m2!.side === 'Blue' ? 'BLUE' : 'RED'}
                                   </span>
                                 </>
                               ) : (

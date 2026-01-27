@@ -151,6 +151,14 @@ export interface TeamStats {
   form_last10: number;
 }
 
+export interface CompareSideStats {
+  total: number;
+  first_blood: number;
+  first_tower: number;
+  first_dragon: number;
+  first_baron: number;
+}
+
 export interface CompareTeamRates {
   total: number;
   wins: number;
@@ -169,12 +177,17 @@ export interface CompareTeamRates {
   avg_barons: number;
   avg_inhibitors: number;
   avg_game_length: number | null;
+  side_stats?: {
+    blue: CompareSideStats;
+    red: CompareSideStats;
+  };
 }
 
 export interface CompareMatchDetail {
   match_id: number;
   date: string | null;
   opponent: string;
+  side: 'Blue' | 'Red';
   is_winner: boolean;
   first_blood: boolean;
   first_tower: boolean;
@@ -319,6 +332,19 @@ export interface ScheduleResponse {
   message?: string;
 }
 
+export interface EloRating {
+  rank: number;
+  team: TeamMin;
+  elo_rating: number;
+  elo_rating_blue: number;
+  elo_rating_red: number;
+  last_change: number;
+  last_change_blue: number;
+  last_change_red: number;
+  matches_played: number;
+  last_match_date: string | null;
+}
+
 export interface PaginatedResponse<T> {
   count: number;
   next: string | null;
@@ -370,6 +396,7 @@ export interface MatchPredictions {
   total_kills: number;
   total_dragons: number;
   total_towers: number;
+  total_barons: number;
   game_time: number;
 }
 

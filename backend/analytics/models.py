@@ -456,6 +456,65 @@ class PlayerMatchStats(models.Model):
         return f"{self.player.name} ({self.champion}) - {self.match.gameid}"
 
 
+class TeamEloRating(models.Model):
+    """Rating ELO de um time em uma liga especifica."""
+
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        related_name="elo_ratings",
+        verbose_name="Time",
+    )
+    league = models.ForeignKey(
+        League,
+        on_delete=models.CASCADE,
+        related_name="elo_ratings",
+        verbose_name="Liga",
+    )
+    elo_rating = models.FloatField(
+        default=1500.0,
+        verbose_name="ELO Rating",
+    )
+    elo_rating_blue = models.FloatField(
+        default=1500.0,
+        verbose_name="ELO (Blue Side)",
+    )
+    elo_rating_red = models.FloatField(
+        default=1500.0,
+        verbose_name="ELO (Red Side)",
+    )
+    matches_played = models.IntegerField(
+        default=0,
+        verbose_name="Partidas Jogadas",
+    )
+    last_change = models.FloatField(
+        default=0.0,
+        verbose_name="Ultima Variacao",
+    )
+    last_change_blue = models.FloatField(
+        default=0.0,
+        verbose_name="Var. Blue",
+    )
+    last_change_red = models.FloatField(
+        default=0.0,
+        verbose_name="Var. Red",
+    )
+    last_match_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Data da Ultima Partida",
+    )
+
+    class Meta:
+        verbose_name = "ELO Rating"
+        verbose_name_plural = "ELO Ratings"
+        ordering = ["-elo_rating"]
+        unique_together = ("team", "league")
+
+    def __str__(self) -> str:
+        return f"{self.team.name} ({self.league.name}) - ELO {self.elo_rating:.0f}"
+
+
 class DataImportLog(models.Model):
     """Registro de importacao de dados do Oracle's Elixir."""
 
