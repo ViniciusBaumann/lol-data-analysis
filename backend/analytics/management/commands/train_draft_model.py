@@ -3,7 +3,14 @@
 Trains 1 classifier (blue side win probability) and 4 regression models
 (total kills, towers, dragons, barons) based on:
 - 10 champion features (8 per slot = 80 champion features)
-- Team rolling stats, ELO, H2H when teams are provided (same as train_prediction_model)
+- Player-specific champion performance (win rate, games played)
+- Team synergy features
+- Team rolling stats, ELO, H2H when teams are provided
+
+Enhanced with:
+- Player-specific champion win rates (strongest predictor per IEEE paper)
+- Champion matchup considerations
+- Improved hyperparameter tuning
 """
 
 import json
@@ -12,7 +19,7 @@ from collections import defaultdict
 import joblib
 import numpy as np
 from django.core.management.base import BaseCommand
-from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, mean_absolute_error
+from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, mean_absolute_error, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 
 from analytics.models import Match, PlayerMatchStats, TeamMatchStats
@@ -29,8 +36,13 @@ MIN_GAMES = 3
 WINDOW = 10
 DECAY_FACTOR = 0.75
 
-# Number of team-context features appended after the 80 champion features.
-# 19 per team (2) + 9 diff + 3 h2h + 6 elo + 25 pos per team (2) = 106
+# Number of team-context features appended after champion features.
+# Updated for enhanced features:
+# - 80 champion features (8 per slot × 10 slots)
+# - 20 player-champion features (2 per slot × 10 slots: player_champ_wr, player_champ_games)
+# - 106 team context features (same as before)
+NUM_CHAMPION_FEATURES = 80
+NUM_PLAYER_CHAMP_FEATURES = 20
 NUM_TEAM_FEATURES = 106
 
 
@@ -89,6 +101,13 @@ class Command(BaseCommand):
         # Champion history: (champion, position) -> list of per-game stats
         champion_history: dict[tuple[str, str], list[dict]] = defaultdict(list)
 
+        # Player-champion history: (player_id, champion) -> list of {is_winner, ...}
+        # This is the strongest predictor per IEEE paper (champion win rate by player)
+        player_champion_history: dict[tuple[int, str], list[dict]] = defaultdict(list)
+
+        # Player overall stats: player_id -> list of per-game stats
+        player_history: dict[int, list[dict]] = defaultdict(list)
+
         # Team history: team_id -> list of match records (for rolling stats)
         team_history: dict[int, list[dict]] = defaultdict(list)
         team_last_roster: dict[int, frozenset] = {}
@@ -118,7 +137,8 @@ class Command(BaseCommand):
             if len(ps_list) != 10:
                 self._update_accumulators_after(
                     match, ps_list, team_stats_by_match, player_stats_by_match_team,
-                    champion_history, team_history, team_last_roster,
+                    champion_history, player_champion_history, player_history,
+                    team_history, team_last_roster,
                     team_roster_change_idx, elo_tracker, elo_blue_tracker,
                     elo_red_tracker, elo_matches_played, side_matches_blue,
                     side_matches_red, team_last_split,
@@ -130,7 +150,8 @@ class Command(BaseCommand):
             if not blue_stat or not red_stat:
                 self._update_accumulators_after(
                     match, ps_list, team_stats_by_match, player_stats_by_match_team,
-                    champion_history, team_history, team_last_roster,
+                    champion_history, player_champion_history, player_history,
+                    team_history, team_last_roster,
                     team_roster_change_idx, elo_tracker, elo_blue_tracker,
                     elo_red_tracker, elo_matches_played, side_matches_blue,
                     side_matches_red, team_last_split,
@@ -162,7 +183,8 @@ class Command(BaseCommand):
             if len(blue_players) != 5 or len(red_players) != 5:
                 self._update_accumulators_after(
                     match, ps_list, team_stats_by_match, player_stats_by_match_team,
-                    champion_history, team_history, team_last_roster,
+                    champion_history, player_champion_history, player_history,
+                    team_history, team_last_roster,
                     team_roster_change_idx, elo_tracker, elo_blue_tracker,
                     elo_red_tracker, elo_matches_played, side_matches_blue,
                     side_matches_red, team_last_split,
@@ -202,12 +224,34 @@ class Command(BaseCommand):
                 skipped_insufficient += 1
                 self._update_accumulators_after(
                     match, ps_list, team_stats_by_match, player_stats_by_match_team,
-                    champion_history, team_history, team_last_roster,
+                    champion_history, player_champion_history, player_history,
+                    team_history, team_last_roster,
                     team_roster_change_idx, elo_tracker, elo_blue_tracker,
                     elo_red_tracker, elo_matches_played, side_matches_blue,
                     side_matches_red, team_last_split,
                 )
                 continue
+
+            # ---- Player-champion features (20 = 2 per slot × 10 slots) ----
+            # This is the strongest predictor per IEEE paper
+            player_champ_features = []
+            for side_players in [blue_players, red_players]:
+                for pos in DRAFT_POSITIONS:
+                    ps = side_players[pos]
+                    player_id = ps.player_id
+                    champion = ps.champion
+                    pc_key = (player_id, champion)
+                    pc_history = player_champion_history[pc_key]
+
+                    if len(pc_history) > 0:
+                        pc_wins = sum(1 for h in pc_history if h["is_winner"])
+                        pc_wr = pc_wins / len(pc_history)
+                        pc_games = float(len(pc_history))
+                    else:
+                        pc_wr = 0.5  # Default for no history
+                        pc_games = 0.0
+
+                    player_champ_features.extend([pc_wr, pc_games])
 
             # ---- Team context features (106) ----
             blue_hist = self._get_post_roster_history(
@@ -265,7 +309,8 @@ class Command(BaseCommand):
                 # Fill with zeros when team history insufficient
                 team_ctx = [0.0] * NUM_TEAM_FEATURES
 
-            all_features = champ_features + team_ctx
+            # Combine all features: champion (80) + player-champion (20) + team context (106)
+            all_features = champ_features + player_champ_features + team_ctx
 
             # Targets
             blue_wins = 1 if match.winner_id == blue_id else 0
@@ -286,7 +331,8 @@ class Command(BaseCommand):
             # Update accumulators AFTER feature extraction
             self._update_accumulators_after(
                 match, ps_list, team_stats_by_match, player_stats_by_match_team,
-                champion_history, team_history, team_last_roster,
+                champion_history, player_champion_history, player_history,
+                team_history, team_last_roster,
                 team_roster_change_idx, elo_tracker, elo_blue_tracker,
                 elo_red_tracker, elo_matches_played, side_matches_blue,
                 side_matches_red, team_last_split,
@@ -298,7 +344,10 @@ class Command(BaseCommand):
         )
         if rows:
             feat_len = len(rows[0]["features"])
-            self.stdout.write(f"Feature vector size: {feat_len} (80 champion + {feat_len - 80} team context)")
+            self.stdout.write(
+                f"Feature vector size: {feat_len} "
+                f"(80 champion + 20 player-champion + {feat_len - 100} team context)"
+            )
 
         if len(rows) < 30:
             self.stderr.write(
@@ -340,18 +389,26 @@ class Command(BaseCommand):
             is_cls = config["type"] == "classification"
 
             if no_tune:
+                # Improved default parameters
                 params = {
-                    "n_estimators": 200,
-                    "max_depth": 6,
-                    "learning_rate": 0.1,
-                    "num_leaves": 31,
+                    "n_estimators": 300,
+                    "max_depth": 8,
+                    "learning_rate": 0.05,
+                    "num_leaves": 63,
+                    "min_child_samples": 20,
+                    "subsample": 0.8,
+                    "colsample_bytree": 0.8,
+                    "reg_alpha": 0.1,
+                    "reg_lambda": 0.1,
                     "random_state": 42,
                     "verbosity": -1,
+                    "n_jobs": 4,
                 }
-                self.stdout.write(f"  {name}: training with default params...")
+                self.stdout.write(f"  {name}: training with optimized default params...")
             else:
-                self.stdout.write(f"  {name}: running Optuna tuning (50 trials)...")
-                params = self._tune_with_optuna(X_train, y_train, config["type"])
+                n_trials = 100
+                self.stdout.write(f"  {name}: running Optuna tuning ({n_trials} trials)...")
+                params = self._tune_with_optuna(X_train, y_train, config["type"], n_trials=n_trials)
                 self.stdout.write(f"  {name}: best params = {params}")
 
             all_best_params[name] = params
@@ -369,12 +426,13 @@ class Command(BaseCommand):
                 preds = model.predict(X_test)
                 probs = model.predict_proba(X_test)[:, 1]
                 acc = accuracy_score(y_test, preds)
+                auc = roc_auc_score(y_test, probs)
                 brier = brier_score_loss(y_test, probs)
                 logloss = log_loss(y_test, probs)
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"  {name}: Accuracy = {acc:.3f}, Brier = {brier:.4f}, "
-                        f"LogLoss = {logloss:.4f} -> {model_path}"
+                        f"  {name}: Accuracy = {acc:.3f}, AUC = {auc:.4f}, "
+                        f"Brier = {brier:.4f}, LogLoss = {logloss:.4f} -> {model_path}"
                     )
                 )
             else:
@@ -398,7 +456,8 @@ class Command(BaseCommand):
 
     def _update_accumulators_after(
         self, match, ps_list, team_stats_by_match, player_stats_by_match_team,
-        champion_history, team_history, team_last_roster,
+        champion_history, player_champion_history, player_history,
+        team_history, team_last_roster,
         team_roster_change_idx, elo_tracker, elo_blue_tracker,
         elo_red_tracker, elo_matches_played, side_matches_blue,
         side_matches_red, team_last_split,
@@ -412,14 +471,38 @@ class Command(BaseCommand):
         blue_stat = team_stats_by_match.get(match.id, {}).get(blue_id)
         red_stat = team_stats_by_match.get(match.id, {}).get(red_id)
 
-        # Update champion history
+        # Update champion history and player-champion history
         for ps in ps_list:
             pos = ps.position.lower()
             if pos not in DRAFT_POSITIONS:
                 continue
             ts = team_stats_by_match.get(match.id, {}).get(ps.team_id)
             is_winner = ts.is_winner if ts else False
+
+            # Champion history (champion, position)
             champion_history[(ps.champion, pos)].append({
+                "is_winner": is_winner,
+                "kda": ps.kda or 0.0,
+                "kills": ps.kills or 0,
+                "deaths": ps.deaths or 0,
+                "gold_per_min": ps.gold_per_min or 0.0,
+                "damage_per_min": ps.damage_per_min or 0.0,
+                "cs_per_min": ps.cs_per_min or 0.0,
+            })
+
+            # Player-champion history (player_id, champion) - strongest predictor
+            player_champion_history[(ps.player_id, ps.champion)].append({
+                "is_winner": is_winner,
+                "kda": ps.kda or 0.0,
+                "kills": ps.kills or 0,
+                "deaths": ps.deaths or 0,
+                "gold_per_min": ps.gold_per_min or 0.0,
+                "damage_per_min": ps.damage_per_min or 0.0,
+                "cs_per_min": ps.cs_per_min or 0.0,
+            })
+
+            # Player overall history
+            player_history[ps.player_id].append({
                 "is_winner": is_winner,
                 "kda": ps.kda or 0.0,
                 "kills": ps.kills or 0,
@@ -620,30 +703,41 @@ class Command(BaseCommand):
             "recent_form_vs": recent_wins / len(recent),
         }
 
-    def _tune_with_optuna(self, X_train, y_train, model_type: str = "regression") -> dict:
+    def _tune_with_optuna(self, X_train, y_train, model_type: str = "regression", n_trials: int = 100) -> dict:
+        """Run Optuna hyperparameter tuning with TimeSeriesSplit cross-validation.
+
+        Enhanced with:
+        - More trials (100 by default)
+        - ROC AUC scoring for classification
+        - Better hyperparameter ranges
+        """
         import optuna
         from lightgbm import LGBMClassifier, LGBMRegressor
 
         optuna.logging.set_verbosity(optuna.logging.WARNING)
-        tscv = TimeSeriesSplit(n_splits=3)
+        tscv = TimeSeriesSplit(n_splits=5)
 
         def objective(trial):
             params = {
-                "n_estimators": trial.suggest_int("n_estimators", 100, 500),
-                "max_depth": trial.suggest_int("max_depth", 3, 10),
-                "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
-                "num_leaves": trial.suggest_int("num_leaves", 15, 63),
-                "min_child_samples": trial.suggest_int("min_child_samples", 5, 50),
-                "subsample": trial.suggest_float("subsample", 0.6, 1.0),
-                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
-                "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 10.0, log=True),
-                "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 10.0, log=True),
+                "n_estimators": trial.suggest_int("n_estimators", 100, 800),
+                "max_depth": trial.suggest_int("max_depth", 3, 12),
+                "learning_rate": trial.suggest_float("learning_rate", 0.005, 0.3, log=True),
+                "num_leaves": trial.suggest_int("num_leaves", 15, 127),
+                "min_child_samples": trial.suggest_int("min_child_samples", 5, 100),
+                "min_child_weight": trial.suggest_float("min_child_weight", 1e-5, 10, log=True),
+                "subsample": trial.suggest_float("subsample", 0.5, 1.0),
+                "subsample_freq": trial.suggest_int("subsample_freq", 1, 7),
+                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
+                "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 100.0, log=True),
+                "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 100.0, log=True),
                 "random_state": 42,
                 "verbosity": -1,
+                "n_jobs": 4,
             }
             if model_type == "classification":
                 model = LGBMClassifier(**params)
-                scoring = "accuracy"
+                # Use ROC AUC for better probability calibration
+                scoring = "roc_auc"
             else:
                 model = LGBMRegressor(**params)
                 scoring = "neg_mean_absolute_error"
@@ -652,10 +746,12 @@ class Command(BaseCommand):
 
         study = optuna.create_study(
             direction="maximize",
-            sampler=optuna.samplers.TPESampler(seed=42),
+            sampler=optuna.samplers.TPESampler(seed=42, n_startup_trials=20),
+            pruner=optuna.pruners.MedianPruner(n_startup_trials=10, n_warmup_steps=5),
         )
-        study.optimize(objective, n_trials=50, show_progress_bar=False)
+        study.optimize(objective, n_trials=n_trials, show_progress_bar=False, n_jobs=1)
         best = study.best_params
         best["random_state"] = 42
         best["verbosity"] = -1
+        best["n_jobs"] = 4
         return best

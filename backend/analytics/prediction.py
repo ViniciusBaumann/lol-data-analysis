@@ -130,6 +130,31 @@ def compute_team_features(team_id: int, n: int = 10) -> dict | None:
         if red_games else 0.5
     )
 
+    # Extended early game features
+    xp10_vals = [s.xpdiffat10 for s in stats_list if s.xpdiffat10 is not None]
+    xp15_vals = [s.xpdiffat15 for s in stats_list if s.xpdiffat15 is not None]
+    cs10_vals = [s.csdiffat10 for s in stats_list if s.csdiffat10 is not None]
+    cs15_vals = [s.csdiffat15 for s in stats_list if s.csdiffat15 is not None]
+    avg_xpdiffat10 = sum(xp10_vals) / len(xp10_vals) if xp10_vals else 0.0
+    avg_xpdiffat15 = sum(xp15_vals) / len(xp15_vals) if xp15_vals else 0.0
+    avg_csdiffat10 = sum(cs10_vals) / len(cs10_vals) if cs10_vals else 0.0
+    avg_csdiffat15 = sum(cs15_vals) / len(cs15_vals) if cs15_vals else 0.0
+
+    # First baron rate
+    first_baron_rate = sum(1 for s in stats_list if s.first_baron) / total
+
+    # Objective control
+    avg_heralds = sum(s.heralds for s in stats_list) / total
+    avg_voidgrubs = sum(s.voidgrubs for s in stats_list) / total
+
+    # Compute momentum (trend in last 5 games)
+    if len(stats_list) >= 5:
+        recent_wins = sum(1 for s in stats_list[-5:] if s.is_winner)
+        older_wins = sum(1 for s in stats_list[-10:-5] if s.is_winner) if len(stats_list) >= 10 else recent_wins
+        momentum = (recent_wins - older_wins) / 5.0
+    else:
+        momentum = 0.0
+
     features = {
         "win_rate": wins / total,
         "avg_kills": avg_kills,
@@ -137,17 +162,25 @@ def compute_team_features(team_id: int, n: int = 10) -> dict | None:
         "avg_towers": avg_towers,
         "avg_dragons": avg_dragons,
         "avg_barons": avg_barons,
+        "avg_heralds": avg_heralds,
+        "avg_voidgrubs": avg_voidgrubs,
         "avg_inhibitors": avg_inhibitors,
         "first_blood_rate": first_blood_rate,
         "first_tower_rate": first_tower_rate,
         "first_dragon_rate": first_dragon_rate,
         "first_herald_rate": first_herald_rate,
+        "first_baron_rate": first_baron_rate,
         "avg_golddiffat10": avg_golddiffat10,
         "avg_golddiffat15": avg_golddiffat15,
+        "avg_xpdiffat10": avg_xpdiffat10,
+        "avg_xpdiffat15": avg_xpdiffat15,
+        "avg_csdiffat10": avg_csdiffat10,
+        "avg_csdiffat15": avg_csdiffat15,
         "avg_game_length": avg_game_length,
         "win_rate_last3": win_rate_last3,
         "win_rate_last5": win_rate_last5,
         "streak": streak,
+        "momentum": momentum,
         "blue_win_rate": blue_win_rate,
         "red_win_rate": red_win_rate,
     }
@@ -210,10 +243,16 @@ def compute_h2h_features(team1_id: int, team2_id: int) -> dict:
     else:
         recent_form_vs = 0.5
 
+    # Average game duration in H2H
+    game_lengths = [m.game_length for m in list(h2h_matches[:20]) if m.game_length]
+    avg_game_duration = sum(game_lengths) / len(game_lengths) if game_lengths else 30
+
     return {
         "win_rate_vs": win_rate_vs,
         "total_games_vs": total_h2h,
         "recent_form_vs": recent_form_vs,
+        "avg_gold_diff_vs": 0,  # Would require additional query
+        "avg_game_duration_vs": avg_game_duration,
     }
 
 
@@ -285,16 +324,25 @@ def build_matchup_features(team1_id: int, team2_id: int, league_id: int | None =
     # Team 2 features
     t2_features = [f2[k] for k in feature_keys]
 
-    # Differential features (team1 - team2)
+    # Differential features (team1 - team2) - extended with early game features
     diff_keys = [
         "win_rate", "avg_kills", "avg_towers", "avg_dragons",
         "avg_golddiffat10", "avg_golddiffat15",
-        "win_rate_last3", "win_rate_last5", "streak",
+        "avg_xpdiffat10", "avg_xpdiffat15",
+        "avg_csdiffat10", "avg_csdiffat15",
+        "win_rate_last3", "win_rate_last5", "streak", "momentum",
+        "first_blood_rate", "first_tower_rate", "first_dragon_rate",
     ]
     diff_features = [f1[k] - f2[k] for k in diff_keys]
 
-    # H2H features
-    h2h_features = [h2h["win_rate_vs"], h2h["total_games_vs"], h2h["recent_form_vs"]]
+    # H2H features - extended
+    h2h_features = [
+        h2h["win_rate_vs"],
+        h2h["total_games_vs"],
+        h2h["recent_form_vs"],
+        h2h.get("avg_gold_diff_vs", 0),
+        h2h.get("avg_game_duration_vs", 30),
+    ]
 
     # ELO features (global + side, 6 features)
     t1_data = get_team_elo(team1_id, league_id)
@@ -319,10 +367,13 @@ def get_feature_names() -> list[str]:
     """Return the ordered list of feature names matching build_matchup_features output."""
     feature_keys = [
         "win_rate", "avg_kills", "avg_deaths", "avg_towers", "avg_dragons",
-        "avg_barons", "avg_inhibitors", "first_blood_rate", "first_tower_rate",
-        "first_dragon_rate", "first_herald_rate", "avg_golddiffat10",
-        "avg_golddiffat15", "avg_game_length",
-        "win_rate_last3", "win_rate_last5", "streak", "blue_win_rate", "red_win_rate",
+        "avg_barons", "avg_heralds", "avg_voidgrubs", "avg_inhibitors",
+        "first_blood_rate", "first_tower_rate", "first_dragon_rate",
+        "first_herald_rate", "first_baron_rate",
+        "avg_golddiffat10", "avg_golddiffat15",
+        "avg_xpdiffat10", "avg_xpdiffat15", "avg_csdiffat10", "avg_csdiffat15",
+        "avg_game_length", "win_rate_last3", "win_rate_last5",
+        "streak", "momentum", "blue_win_rate", "red_win_rate",
     ]
 
     names = []
@@ -333,12 +384,17 @@ def get_feature_names() -> list[str]:
     diff_keys = [
         "win_rate", "avg_kills", "avg_towers", "avg_dragons",
         "avg_golddiffat10", "avg_golddiffat15",
-        "win_rate_last3", "win_rate_last5", "streak",
+        "avg_xpdiffat10", "avg_xpdiffat15", "avg_csdiffat10", "avg_csdiffat15",
+        "win_rate_last3", "win_rate_last5", "streak", "momentum",
+        "first_blood_rate", "first_tower_rate", "first_dragon_rate",
     ]
     for k in diff_keys:
         names.append(f"diff_{k}")
 
-    names.extend(["h2h_win_rate_vs", "h2h_total_games_vs", "h2h_recent_form_vs"])
+    names.extend([
+        "h2h_win_rate_vs", "h2h_total_games_vs", "h2h_recent_form_vs",
+        "h2h_avg_gold_diff_vs", "h2h_avg_game_duration_vs"
+    ])
 
     # ELO features (global + side)
     names.extend(["t1_elo", "t2_elo", "diff_elo", "t1_elo_side", "t2_elo_side", "diff_elo_side"])
@@ -439,21 +495,22 @@ def build_draft_features(
     draft: dict,
     blue_team_id: int | None = None,
     red_team_id: int | None = None,
+    player_ids: dict | None = None,
 ) -> np.ndarray | None:
     """Build feature vector from a 10-champion draft + optional team context.
 
-    Returns 80 champion features. When both team IDs are provided and have
-    sufficient history, appends 106 team-context features (rolling stats,
-    ELO, H2H, per-position stats) — otherwise pads with zeros so the vector
-    size always matches the trained model.
+    Returns 80 champion features + 20 player-champion features + 106 team-context
+    features = 206 total features. When player_ids or team IDs are not provided,
+    pads with zeros so the vector size always matches the trained model.
 
     Args:
         draft: Dict with keys like 'blue_top' ... 'red_sup'.
         blue_team_id: Optional database ID of the blue-side team.
         red_team_id: Optional database ID of the red-side team.
+        player_ids: Optional dict with keys like 'blue_top_player_id' ... 'red_sup_player_id'.
 
     Returns:
-        numpy array of shape (1, 186), or None if any champion lacks data.
+        numpy array of shape (1, 206), or None if any champion lacks data.
     """
     positions = ["top", "jng", "mid", "bot", "sup"]
     features: list[float] = []
@@ -476,6 +533,46 @@ def build_draft_features(
                 stats["games_played"],
             ])
 
+    # 20 player-champion features (2 per slot: win_rate, games_played)
+    # This is the strongest predictor per IEEE research
+    NUM_PLAYER_CHAMP_FEATURES = 20
+    player_champ_features: list[float] = []
+
+    if player_ids is not None:
+        from analytics.models import PlayerMatchStats, TeamMatchStats
+        for side in ["blue", "red"]:
+            for pos in positions:
+                player_key = f"{side}_{pos}_player_id"
+                player_id = player_ids.get(player_key)
+                champion = draft[f"{side}_{pos}"]
+
+                if player_id:
+                    # Get player's history with this champion
+                    pc_stats = PlayerMatchStats.objects.filter(
+                        player_id=player_id, champion=champion
+                    ).select_related("match")
+                    pc_count = pc_stats.count()
+
+                    if pc_count > 0:
+                        # Get wins for this player on this champion
+                        match_ids = pc_stats.values_list("match_id", flat=True)
+                        wins = TeamMatchStats.objects.filter(
+                            match_id__in=match_ids,
+                            team_id__in=pc_stats.values_list("team_id", flat=True),
+                            is_winner=True
+                        ).count()
+                        pc_wr = wins / pc_count
+                        player_champ_features.extend([pc_wr, float(pc_count)])
+                    else:
+                        player_champ_features.extend([0.5, 0.0])
+                else:
+                    player_champ_features.extend([0.5, 0.0])
+    else:
+        # No player data available, use defaults
+        player_champ_features = [0.5, 0.0] * 10  # 10 slots × 2 features = 20
+
+    features.extend(player_champ_features)
+
     # 106 team-context features
     NUM_TEAM_FEATURES = 106
     team_ctx: list[float] | None = None
@@ -487,24 +584,29 @@ def build_draft_features(
         if f1 is not None and f2 is not None:
             h2h = compute_h2h_features(blue_team_id, red_team_id)
 
-            feature_keys = [
-                "win_rate", "avg_kills", "avg_deaths", "avg_towers", "avg_dragons",
-                "avg_barons", "avg_inhibitors", "first_blood_rate", "first_tower_rate",
-                "first_dragon_rate", "first_herald_rate", "avg_golddiffat10",
-                "avg_golddiffat15", "avg_game_length",
-                "win_rate_last3", "win_rate_last5", "streak", "blue_win_rate", "red_win_rate",
-            ]
+            feature_keys = list(f1.keys())
+            # Filter out position features which are separate
+            feature_keys = [k for k in feature_keys if not k.startswith("pos_")]
             t1_vals = [f1[k] for k in feature_keys]
             t2_vals = [f2[k] for k in feature_keys]
 
             diff_keys = [
                 "win_rate", "avg_kills", "avg_towers", "avg_dragons",
                 "avg_golddiffat10", "avg_golddiffat15",
-                "win_rate_last3", "win_rate_last5", "streak",
+                "avg_xpdiffat10", "avg_xpdiffat15",
+                "avg_csdiffat10", "avg_csdiffat15",
+                "win_rate_last3", "win_rate_last5", "streak", "momentum",
+                "first_blood_rate", "first_tower_rate", "first_dragon_rate",
             ]
-            diff_vals = [f1[k] - f2[k] for k in diff_keys]
+            diff_vals = [f1.get(k, 0) - f2.get(k, 0) for k in diff_keys]
 
-            h2h_vals = [h2h["win_rate_vs"], h2h["total_games_vs"], h2h["recent_form_vs"]]
+            h2h_vals = [
+                h2h["win_rate_vs"],
+                h2h["total_games_vs"],
+                h2h["recent_form_vs"],
+                h2h.get("avg_gold_diff_vs", 0),
+                h2h.get("avg_game_duration_vs", 30),
+            ]
 
             t1_elo = get_team_elo(blue_team_id)
             t2_elo = get_team_elo(red_team_id)
@@ -516,8 +618,8 @@ def build_draft_features(
             pos_feature_keys = [
                 f"pos_{pos}_avg_{stat}" for pos in POSITIONS for stat in POSITION_STATS
             ]
-            t1_pos = [f1[k] for k in pos_feature_keys]
-            t2_pos = [f2[k] for k in pos_feature_keys]
+            t1_pos = [f1.get(k, 0) for k in pos_feature_keys]
+            t2_pos = [f2.get(k, 0) for k in pos_feature_keys]
 
             team_ctx = t1_vals + t2_vals + diff_vals + h2h_vals + elo_vals + t1_pos + t2_pos
 

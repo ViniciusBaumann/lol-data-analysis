@@ -344,6 +344,7 @@ def fetch_live_events() -> list[dict]:
         results.append({
             "match_id": match_id,
             "game_id": current_game_id,
+            "start_time": ev.get("startTime", ""),
             "block_name": ev.get("blockName", ""),
             "strategy": match_data.get("strategy", {}),
             "teams_raw": teams_raw,
@@ -1116,6 +1117,123 @@ def compute_champion_stats_for_draft(draft: dict[str, str]) -> dict[str, dict | 
     return result
 
 
+def _find_player_by_name(summoner_name: str):
+    """Find player in database, handling team prefix changes.
+
+    Players often have team prefixes in their names that change when they
+    switch teams (e.g., "Loud Tinowns" -> "Pain Tinowns").
+    This function tries multiple strategies to find the player.
+    """
+    from .models import Player
+
+    if not summoner_name:
+        return None
+
+    # 1. Try exact match first (case-insensitive)
+    player = Player.objects.filter(name__iexact=summoner_name).first()
+    if player:
+        return player
+
+    # 2. Extract core name (last part after space) and search
+    # e.g., "Loud Tinowns" -> "Tinowns"
+    parts = summoner_name.strip().split()
+    if len(parts) > 1:
+        core_name = parts[-1]  # Last part is usually the player name
+
+        # Try exact match on core name
+        player = Player.objects.filter(name__iexact=core_name).first()
+        if player:
+            return player
+
+        # Try finding player whose name ends with the core name
+        # This handles "Loud Tinowns" matching "Pain Tinowns" or just "Tinowns"
+        player = Player.objects.filter(name__iendswith=core_name).first()
+        if player:
+            return player
+
+        # Try finding player whose name contains the core name
+        # More lenient search as last resort
+        player = Player.objects.filter(name__icontains=core_name).first()
+        if player:
+            return player
+
+    return None
+
+
+def compute_player_champion_stats(
+    players: dict[str, list] | None,
+    draft: dict[str, str],
+) -> dict[str, dict | None]:
+    """Compute player's historical stats with their drafted champion.
+
+    Returns dict keyed by slot (e.g. "blue_top") with player champion history.
+    Aggregates stats across all teams the player has played for.
+    """
+    from .models import PlayerMatchStats, TeamMatchStats
+
+    if not players:
+        return {}
+
+    result: dict[str, dict | None] = {}
+
+    for side in ("blue", "red"):
+        side_players = players.get(side, [])
+        for player_data in side_players:
+            role = player_data.get("role", "").lower()
+            if role not in _POSITIONS:
+                continue
+
+            slot = f"{side}_{role}"
+            summoner_name = player_data.get("summonerName", "")
+            champion = draft.get(slot)
+
+            if not summoner_name or not champion:
+                result[slot] = None
+                continue
+
+            try:
+                # Find player using flexible name matching
+                player = _find_player_by_name(summoner_name)
+                if not player:
+                    result[slot] = None
+                    continue
+
+                # Get player's history with this champion (across ALL teams)
+                pc_stats = PlayerMatchStats.objects.filter(
+                    player=player, champion__iexact=champion
+                )
+                pc_count = pc_stats.count()
+
+                if pc_count > 0:
+                    # Get wins for this player on this champion
+                    # We need to check each match individually since player may have
+                    # played for different teams
+                    wins = 0
+                    for ps in pc_stats.select_related("match"):
+                        team_won = TeamMatchStats.objects.filter(
+                            match_id=ps.match_id,
+                            team_id=ps.team_id,
+                            is_winner=True
+                        ).exists()
+                        if team_won:
+                            wins += 1
+
+                    win_rate = round((wins / pc_count) * 100, 1) if pc_count > 0 else 0
+
+                    result[slot] = {
+                        "player_name": player.name,
+                        "games": pc_count,
+                        "wins": wins,
+                        "win_rate": win_rate,
+                    }
+                else:
+                    result[slot] = None
+            except Exception:
+                result[slot] = None
+
+    return result
+
+
 def compute_team_context(
     blue_db_id: int, red_db_id: int,
 ) -> dict:
@@ -1201,17 +1319,21 @@ def compute_match_prediction(blue_db_id: int, red_db_id: int) -> dict | None:
 # ---------------------------------------------------------------------------
 
 
-def get_live_games_data() -> list[dict]:
+def get_live_games_data(minimal: bool = False) -> list[dict]:
     """Fetch and process live games data with caching to reduce API load.
 
     Uses a short-lived cache (3s) to reduce redundant API calls when
     the frontend polls frequently (every 5s).
+
+    Args:
+        minimal: If True, skip expensive computations (predictions, enrichment, players)
+                 for faster response in list views.
     """
     from .prediction import predict_draft
 
-    # Check cache first
+    # Check cache first (only for full data, minimal always fetches fresh)
     now = datetime.now(timezone.utc)
-    if _live_events_cache["data"] is not None and _live_events_cache["timestamp"]:
+    if not minimal and _live_events_cache["data"] is not None and _live_events_cache["timestamp"]:
         age = (now - _live_events_cache["timestamp"]).total_seconds()
         if age < _CACHE_TTL_SECONDS:
             return _live_events_cache["data"]
@@ -1219,31 +1341,33 @@ def get_live_games_data() -> list[dict]:
     events = fetch_live_events()
     if not events:
         # Cache empty result too
-        _live_events_cache["data"] = []
-        _live_events_cache["timestamp"] = now
+        if not minimal:
+            _live_events_cache["data"] = []
+            _live_events_cache["timestamp"] = now
         return []
 
-    # Fetch game data concurrently for all live events
-    game_ids = [ev.get("game_id") for ev in events if ev.get("game_id")]
+    # In minimal mode, skip fetching game data entirely (much faster)
     game_data_map: dict[str, dict] = {}
-
-    if game_ids:
-        with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(game_ids))) as executor:
-            future_to_game = {
-                executor.submit(fetch_game_data, gid): gid
-                for gid in game_ids
-            }
-            for future in as_completed(future_to_game):
-                gid = future_to_game[future]
-                try:
-                    game_data_map[gid] = future.result()
-                except Exception:
-                    logger.exception("Failed to fetch game data for %s", gid)
-                    game_data_map[gid] = {
-                        "draft": None, "live_stats": None, "players": None,
-                        "patch_version": "", "ddragon_version": _ddragon_version,
-                        "team_ids": {"blue": None, "red": None}
-                    }
+    if not minimal:
+        # Fetch game data concurrently for all live events
+        game_ids = [ev.get("game_id") for ev in events if ev.get("game_id")]
+        if game_ids:
+            with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(game_ids))) as executor:
+                future_to_game = {
+                    executor.submit(fetch_game_data, gid): gid
+                    for gid in game_ids
+                }
+                for future in as_completed(future_to_game):
+                    gid = future_to_game[future]
+                    try:
+                        game_data_map[gid] = future.result()
+                    except Exception:
+                        logger.exception("Failed to fetch game data for %s", gid)
+                        game_data_map[gid] = {
+                            "draft": None, "live_stats": None, "players": None,
+                            "patch_version": "", "ddragon_version": _ddragon_version,
+                            "team_ids": {"blue": None, "red": None}
+                        }
 
     games: list[dict] = []
 
@@ -1309,79 +1433,96 @@ def get_live_games_data() -> list[dict]:
         if red_raw is None:
             red_raw = teams_raw[1] if len(teams_raw) > 1 else {}
 
-        blue_db_id = match_team_to_db(
-            blue_raw.get("code", ""),
-            blue_raw.get("name", ""),
-        )
-        red_db_id = match_team_to_db(
-            red_raw.get("code", ""),
-            red_raw.get("name", ""),
-        )
-
+        # In minimal mode, skip DB lookups and expensive computations
+        blue_db_id = None
+        red_db_id = None
         prediction = None
-        if draft:
-            try:
-                prediction = predict_draft(
-                    draft,
-                    blue_team_id=blue_db_id,
-                    red_team_id=red_db_id,
-                )
-            except Exception:
-                logger.exception("predict_draft failed for game %s", game_id)
-
-        # Analytics enrichment (only for current in-progress game)
         enrichment = None
-        if draft:
-            try:
-                lane_matchups = compute_lane_matchups(draft)
-                blue_synergies = compute_team_synergies(draft, "blue")
-                red_synergies = compute_team_synergies(draft, "red")
-                champion_stats = compute_champion_stats_for_draft(draft)
-
-                enrichment = {
-                    "lane_matchups": lane_matchups,
-                    "synergies": {
-                        "blue": blue_synergies,
-                        "red": red_synergies,
-                    },
-                    "champion_stats": champion_stats,
-                    "team_context": None,
-                    "match_prediction": None,
-                }
-
-                if blue_db_id is not None and red_db_id is not None:
-                    try:
-                        enrichment["team_context"] = compute_team_context(
-                            blue_db_id, red_db_id,
-                        )
-                    except Exception:
-                        logger.exception("compute_team_context failed")
-
-                    try:
-                        enrichment["match_prediction"] = compute_match_prediction(
-                            blue_db_id, red_db_id,
-                        )
-                    except Exception:
-                        logger.exception("compute_match_prediction failed")
-            except Exception:
-                logger.exception("enrichment failed for game %s", game_id)
-
-        # Build series games for Bo3/Bo5
-        strategy = ev.get("strategy", {})
-        series_count = strategy.get("count", 1)
         series_games = None
-        if series_count > 1:
-            series_games = _build_series_games(
-                ev.get("all_games", []),
-                ev.get("team_id_map", {}),
-                game_id,
+
+        if not minimal:
+            blue_db_id = match_team_to_db(
+                blue_raw.get("code", ""),
+                blue_raw.get("name", ""),
             )
-            # Inject current game draft into its series entry
-            if series_games and draft:
-                for sg in series_games:
-                    if sg.get("is_current"):
-                        sg["draft"] = draft
-                        break
+            red_db_id = match_team_to_db(
+                red_raw.get("code", ""),
+                red_raw.get("name", ""),
+            )
+
+            if draft:
+                try:
+                    prediction = predict_draft(
+                        draft,
+                        blue_team_id=blue_db_id,
+                        red_team_id=red_db_id,
+                    )
+                except Exception:
+                    logger.exception("predict_draft failed for game %s", game_id)
+
+            # Analytics enrichment (only for current in-progress game)
+            if draft:
+                try:
+                    lane_matchups = compute_lane_matchups(draft)
+                    blue_synergies = compute_team_synergies(draft, "blue")
+                    red_synergies = compute_team_synergies(draft, "red")
+                    champion_stats = compute_champion_stats_for_draft(draft)
+                    player_champion_stats = compute_player_champion_stats(players, draft)
+
+                    # Enrich lane matchups with player champion stats
+                    if lane_matchups and player_champion_stats:
+                        for mu in lane_matchups:
+                            pos = mu["position"]
+                            blue_slot = f"blue_{pos}"
+                            red_slot = f"red_{pos}"
+                            mu["blue_player_stats"] = player_champion_stats.get(blue_slot)
+                            mu["red_player_stats"] = player_champion_stats.get(red_slot)
+
+                    enrichment = {
+                        "lane_matchups": lane_matchups,
+                        "synergies": {
+                            "blue": blue_synergies,
+                            "red": red_synergies,
+                        },
+                        "champion_stats": champion_stats,
+                        "team_context": None,
+                        "match_prediction": None,
+                    }
+
+                    if blue_db_id is not None and red_db_id is not None:
+                        try:
+                            enrichment["team_context"] = compute_team_context(
+                                blue_db_id, red_db_id,
+                            )
+                        except Exception:
+                            logger.exception("compute_team_context failed")
+
+                        try:
+                            enrichment["match_prediction"] = compute_match_prediction(
+                                blue_db_id, red_db_id,
+                            )
+                        except Exception:
+                            logger.exception("compute_match_prediction failed")
+                except Exception:
+                    logger.exception("enrichment failed for game %s", game_id)
+
+            # Build series games for Bo3/Bo5
+            strategy = ev.get("strategy", {})
+            series_count = strategy.get("count", 1)
+            if series_count > 1:
+                series_games = _build_series_games(
+                    ev.get("all_games", []),
+                    ev.get("team_id_map", {}),
+                    game_id,
+                )
+                # Inject current game draft into its series entry
+                if series_games and draft:
+                    for sg in series_games:
+                        if sg.get("is_current"):
+                            sg["draft"] = draft
+                            break
+
+        strategy = ev.get("strategy", {})
 
         def _build_team(raw: dict, db_id: int | None) -> dict:
             return {
@@ -1395,6 +1536,7 @@ def get_live_games_data() -> list[dict]:
         games.append({
             "match_id": ev["match_id"],
             "game_id": game_id,
+            "start_time": ev.get("start_time", ""),
             "league": ev["league"],
             "block_name": ev["block_name"],
             "strategy": strategy,
@@ -1411,8 +1553,9 @@ def get_live_games_data() -> list[dict]:
             "series_games": series_games,
         })
 
-    # Update cache
-    _live_events_cache["data"] = games
-    _live_events_cache["timestamp"] = datetime.now(timezone.utc)
+    # Update cache only for full requests
+    if not minimal:
+        _live_events_cache["data"] = games
+        _live_events_cache["timestamp"] = datetime.now(timezone.utc)
 
     return games

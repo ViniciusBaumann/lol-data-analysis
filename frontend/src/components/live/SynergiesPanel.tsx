@@ -31,9 +31,12 @@ function SynergiesPanelComponent({ synergies }: SynergiesPanelProps) {
               <span className="text-zinc-600">+</span>
               <span className="font-medium text-zinc-300">{p.champion2}</span>
             </div>
-            <span className={cn('font-bold tabular-nums shrink-0 ml-1', colorClass)}>
-              {p.win_rate}%
-            </span>
+            <div className="flex items-center gap-1 shrink-0 ml-1">
+              <span className={cn('font-bold tabular-nums', colorClass)}>
+                {p.win_rate}%
+              </span>
+              <span className="text-[9px] text-zinc-600 tabular-nums">{p.games}g</span>
+            </div>
           </div>
         );
       })}
@@ -59,6 +62,7 @@ function SynergiesPanelComponent({ synergies }: SynergiesPanelProps) {
           </div>
         )}
       </div>
+      <p className="text-[8px] text-zinc-600 mt-2">g = partidas da dupla juntas</p>
     </div>
   );
 }

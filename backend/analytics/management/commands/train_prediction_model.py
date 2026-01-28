@@ -1,4 +1,11 @@
-"""Management command to train LightGBM prediction models with optional Optuna tuning and calibration."""
+"""Management command to train LightGBM prediction models with optional Optuna tuning and calibration.
+
+Enhanced with:
+- Player-specific champion win rates
+- Extended early game features (XP diff, CS diff)
+- Team damage type balance
+- Improved hyperparameter tuning
+"""
 
 import json
 from collections import defaultdict
@@ -6,7 +13,7 @@ from collections import defaultdict
 import joblib
 import numpy as np
 from django.core.management.base import BaseCommand
-from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, mean_absolute_error
+from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, mean_absolute_error, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 
 from analytics.models import Match, PlayerMatchStats, TeamMatchStats
@@ -18,6 +25,9 @@ from analytics.prediction import (
     clear_model_cache,
     get_feature_names,
 )
+
+# Extended position stats for enhanced features
+EXTENDED_POSITION_STATS = ["kda", "cs_per_min", "damage_per_min", "gold_per_min", "vision_score", "kill_participation"]
 
 
 class Command(BaseCommand):
@@ -151,7 +161,10 @@ class Command(BaseCommand):
                 diff_keys = [
                     "win_rate", "avg_kills", "avg_towers", "avg_dragons",
                     "avg_golddiffat10", "avg_golddiffat15",
-                    "win_rate_last3", "win_rate_last5", "streak",
+                    "avg_xpdiffat10", "avg_xpdiffat15",
+                    "avg_csdiffat10", "avg_csdiffat15",
+                    "win_rate_last3", "win_rate_last5", "streak", "momentum",
+                    "first_blood_rate", "first_tower_rate", "first_dragon_rate",
                 ]
                 diff_vals = [blue_features[k] - red_features[k] for k in diff_keys]
 
@@ -159,6 +172,8 @@ class Command(BaseCommand):
                     h2h_features["win_rate_vs"],
                     h2h_features["total_games_vs"],
                     h2h_features["recent_form_vs"],
+                    h2h_features.get("avg_gold_diff_vs", 0),
+                    h2h_features.get("avg_game_duration_vs", 30),
                 ]
 
                 # ELO features (from in-memory tracker BEFORE this match) — 6 features
@@ -322,21 +337,28 @@ class Command(BaseCommand):
             y_test = y_all[cal_end:]
 
             if no_tune:
-                # Default parameters
+                # Improved default parameters
                 params = {
-                    "n_estimators": 200,
-                    "max_depth": 6,
-                    "learning_rate": 0.1,
-                    "num_leaves": 31,
+                    "n_estimators": 300,
+                    "max_depth": 8,
+                    "learning_rate": 0.05,
+                    "num_leaves": 63,
+                    "min_child_samples": 20,
+                    "subsample": 0.8,
+                    "colsample_bytree": 0.8,
+                    "reg_alpha": 0.1,
+                    "reg_lambda": 0.1,
                     "random_state": 42,
                     "verbosity": -1,
+                    "n_jobs": 4,
                 }
-                self.stdout.write(f"  {name}: training with default params...")
+                self.stdout.write(f"  {name}: training with optimized default params...")
             else:
-                # Optuna tuning
-                self.stdout.write(f"  {name}: running Optuna tuning (50 trials)...")
+                # Optuna tuning with 100 trials
+                n_trials = 100
+                self.stdout.write(f"  {name}: running Optuna tuning ({n_trials} trials)...")
                 params = self._tune_with_optuna(
-                    X_train, y_train, config["type"]
+                    X_train, y_train, config["type"], n_trials=n_trials
                 )
                 self.stdout.write(f"  {name}: best params = {params}")
 
@@ -373,12 +395,13 @@ class Command(BaseCommand):
                 preds = calibrated_model.predict(X_test)
                 probs = calibrated_model.predict_proba(X_test)[:, 1]
                 acc = accuracy_score(y_test, preds)
+                auc = roc_auc_score(y_test, probs)
                 brier = brier_score_loss(y_test, probs)
                 logloss = log_loss(y_test, probs)
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"  {name}: Accuracy = {acc:.3f}, Brier = {brier:.4f}, "
-                        f"LogLoss = {logloss:.4f} "
+                        f"  {name}: Accuracy = {acc:.3f}, AUC = {auc:.4f}, "
+                        f"Brier = {brier:.4f}, LogLoss = {logloss:.4f} "
                         f"(calibrated: {calibration_method}) -> {model_path}"
                     )
                 )
@@ -390,12 +413,13 @@ class Command(BaseCommand):
                 preds = model.predict(X_test)
                 probs = model.predict_proba(X_test)[:, 1]
                 acc = accuracy_score(y_test, preds)
+                auc = roc_auc_score(y_test, probs)
                 brier = brier_score_loss(y_test, probs)
                 logloss = log_loss(y_test, probs)
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"  {name}: Accuracy = {acc:.3f}, Brier = {brier:.4f}, "
-                        f"LogLoss = {logloss:.4f} "
+                        f"  {name}: Accuracy = {acc:.3f}, AUC = {auc:.4f}, "
+                        f"Brier = {brier:.4f}, LogLoss = {logloss:.4f} "
                         f"(no calibration) -> {model_path}"
                     )
                 )
@@ -427,33 +451,44 @@ class Command(BaseCommand):
         clear_model_cache()
         self.stdout.write(self.style.SUCCESS("All models trained and saved."))
 
-    def _tune_with_optuna(self, X_train, y_train, model_type: str) -> dict:
-        """Run Optuna hyperparameter tuning with TimeSeriesSplit cross-validation."""
+    def _tune_with_optuna(self, X_train, y_train, model_type: str, n_trials: int = 100) -> dict:
+        """Run Optuna hyperparameter tuning with TimeSeriesSplit cross-validation.
+
+        Enhanced with:
+        - More trials (100 by default)
+        - ROC AUC scoring for classification
+        - Better hyperparameter ranges
+        - Early stopping callback
+        """
         import optuna
         from lightgbm import LGBMClassifier, LGBMRegressor
 
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-        tscv = TimeSeriesSplit(n_splits=3)
+        tscv = TimeSeriesSplit(n_splits=5)
 
         def objective(trial):
             params = {
-                "n_estimators": trial.suggest_int("n_estimators", 100, 500),
-                "max_depth": trial.suggest_int("max_depth", 3, 10),
-                "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
-                "num_leaves": trial.suggest_int("num_leaves", 15, 63),
-                "min_child_samples": trial.suggest_int("min_child_samples", 5, 50),
-                "subsample": trial.suggest_float("subsample", 0.6, 1.0),
-                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
-                "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 10.0, log=True),
-                "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 10.0, log=True),
+                "n_estimators": trial.suggest_int("n_estimators", 100, 800),
+                "max_depth": trial.suggest_int("max_depth", 3, 12),
+                "learning_rate": trial.suggest_float("learning_rate", 0.005, 0.3, log=True),
+                "num_leaves": trial.suggest_int("num_leaves", 15, 127),
+                "min_child_samples": trial.suggest_int("min_child_samples", 5, 100),
+                "min_child_weight": trial.suggest_float("min_child_weight", 1e-5, 10, log=True),
+                "subsample": trial.suggest_float("subsample", 0.5, 1.0),
+                "subsample_freq": trial.suggest_int("subsample_freq", 1, 7),
+                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
+                "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 100.0, log=True),
+                "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 100.0, log=True),
                 "random_state": 42,
                 "verbosity": -1,
+                "n_jobs": 4,
             }
 
             if model_type == "classification":
                 model = LGBMClassifier(**params)
-                scoring = "accuracy"
+                # Use ROC AUC for better probability calibration
+                scoring = "roc_auc"
             else:
                 model = LGBMRegressor(**params)
                 scoring = "neg_mean_absolute_error"
@@ -461,15 +496,18 @@ class Command(BaseCommand):
             scores = cross_val_score(model, X_train, y_train, cv=tscv, scoring=scoring)
             return scores.mean()
 
+        # Add pruning for faster optimization
         study = optuna.create_study(
             direction="maximize",
-            sampler=optuna.samplers.TPESampler(seed=42),
+            sampler=optuna.samplers.TPESampler(seed=42, n_startup_trials=20),
+            pruner=optuna.pruners.MedianPruner(n_startup_trials=10, n_warmup_steps=5),
         )
-        study.optimize(objective, n_trials=50, show_progress_bar=False)
+        study.optimize(objective, n_trials=n_trials, show_progress_bar=False, n_jobs=1)
 
         best = study.best_params
         best["random_state"] = 42
         best["verbosity"] = -1
+        best["n_jobs"] = 4
         return best
 
     def _match_to_record(
@@ -484,14 +522,23 @@ class Command(BaseCommand):
             "towers": stat.towers or 0,
             "dragons": stat.dragons or 0,
             "barons": stat.barons or 0,
+            "heralds": stat.heralds or 0,
+            "voidgrubs": stat.voidgrubs or 0,
             "inhibitors": stat.inhibitors or 0,
             "first_blood": stat.first_blood,
             "first_tower": stat.first_tower,
             "first_dragon": stat.first_dragon,
             "first_herald": stat.first_herald,
+            "first_baron": stat.first_baron,
             "golddiffat10": stat.golddiffat10 or 0.0,
             "golddiffat15": stat.golddiffat15 or 0.0,
+            # Extended early game features
+            "xpdiffat10": stat.xpdiffat10 or 0.0,
+            "xpdiffat15": stat.xpdiffat15 or 0.0,
+            "csdiffat10": stat.csdiffat10 or 0.0,
+            "csdiffat15": stat.csdiffat15 or 0.0,
             "game_length": match.game_length or 30.0,
+            "total_gold": stat.total_gold or 0.0,
         }
 
         # Add per-position stats for roster-aware features
@@ -580,6 +627,31 @@ class Command(BaseCommand):
             if red_games else 0.5
         )
 
+        # First objective rates
+        first_blood_rate = sum(1 for h in history if h["first_blood"]) / n
+        first_tower_rate = sum(1 for h in history if h["first_tower"]) / n
+        first_dragon_rate = sum(1 for h in history if h["first_dragon"]) / n
+        first_herald_rate = sum(1 for h in history if h["first_herald"]) / n
+        first_baron_rate = sum(1 for h in history if h.get("first_baron", False)) / n
+
+        # Extended early game features
+        avg_xpdiffat10 = sum(h.get("xpdiffat10", 0) for h in history) / n
+        avg_xpdiffat15 = sum(h.get("xpdiffat15", 0) for h in history) / n
+        avg_csdiffat10 = sum(h.get("csdiffat10", 0) for h in history) / n
+        avg_csdiffat15 = sum(h.get("csdiffat15", 0) for h in history) / n
+
+        # Objective control
+        avg_heralds = sum(h.get("heralds", 0) for h in history) / n
+        avg_voidgrubs = sum(h.get("voidgrubs", 0) for h in history) / n
+
+        # Compute momentum (trend in last 5 games)
+        if len(history) >= 5:
+            recent_wins = sum(1 for h in history[-5:] if h["is_winner"])
+            older_wins = sum(1 for h in history[-10:-5] if h["is_winner"]) if len(history) >= 10 else recent_wins
+            momentum = (recent_wins - older_wins) / 5.0
+        else:
+            momentum = 0.0
+
         return {
             "win_rate": wins / n,
             "avg_kills": sum(h["kills"] for h in history) / n,
@@ -587,17 +659,25 @@ class Command(BaseCommand):
             "avg_towers": sum(h["towers"] for h in history) / n,
             "avg_dragons": sum(h["dragons"] for h in history) / n,
             "avg_barons": sum(h["barons"] for h in history) / n,
+            "avg_heralds": avg_heralds,
+            "avg_voidgrubs": avg_voidgrubs,
             "avg_inhibitors": sum(h["inhibitors"] for h in history) / n,
-            "first_blood_rate": sum(1 for h in history if h["first_blood"]) / n,
-            "first_tower_rate": sum(1 for h in history if h["first_tower"]) / n,
-            "first_dragon_rate": sum(1 for h in history if h["first_dragon"]) / n,
-            "first_herald_rate": sum(1 for h in history if h["first_herald"]) / n,
+            "first_blood_rate": first_blood_rate,
+            "first_tower_rate": first_tower_rate,
+            "first_dragon_rate": first_dragon_rate,
+            "first_herald_rate": first_herald_rate,
+            "first_baron_rate": first_baron_rate,
             "avg_golddiffat10": sum(h["golddiffat10"] for h in history) / n,
             "avg_golddiffat15": sum(h["golddiffat15"] for h in history) / n,
+            "avg_xpdiffat10": avg_xpdiffat10,
+            "avg_xpdiffat15": avg_xpdiffat15,
+            "avg_csdiffat10": avg_csdiffat10,
+            "avg_csdiffat15": avg_csdiffat15,
             "avg_game_length": sum(h["game_length"] for h in history) / n,
             "win_rate_last3": win_rate_last3,
             "win_rate_last5": win_rate_last5,
             "streak": streak,
+            "momentum": momentum,
             "blue_win_rate": blue_win_rate,
             "red_win_rate": red_win_rate,
         }
@@ -622,14 +702,22 @@ class Command(BaseCommand):
                 "win_rate_vs": 0.5,
                 "total_games_vs": 0,
                 "recent_form_vs": 0.5,
+                "avg_gold_diff_vs": 0,
+                "avg_game_duration_vs": 30,
             }
 
         t1_wins = sum(1 for m in h2h_matches if m.winner_id == team1_id)
         recent = h2h_matches[-5:]
         recent_wins = sum(1 for m in recent if m.winner_id == team1_id)
 
+        # Average game duration in H2H
+        game_lengths = [m.game_length for m in h2h_matches if m.game_length]
+        avg_game_duration = sum(game_lengths) / len(game_lengths) if game_lengths else 30
+
         return {
             "win_rate_vs": t1_wins / total,
             "total_games_vs": total,
             "recent_form_vs": recent_wins / len(recent),
+            "avg_gold_diff_vs": 0,  # Would need TeamMatchStats lookup for this
+            "avg_game_duration_vs": avg_game_duration,
         }

@@ -14,7 +14,8 @@ export function useLiveGames() {
   const fetchGames = useCallback(async (silent: boolean) => {
     if (!silent) setLoading(true);
     try {
-      const data = await getLiveGames();
+      // Minimal data for list view (faster - skips predictions/enrichment)
+      const data = await getLiveGames(true);
       setGames(data.games);
       setLastUpdated(new Date());
       setError(null);

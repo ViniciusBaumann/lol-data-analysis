@@ -483,6 +483,13 @@ export interface LiveGamePrediction {
 
 // ---------- Enrichment types ----------
 
+export interface PlayerChampionStats {
+  player_name: string;
+  games: number;
+  wins: number;
+  win_rate: number;
+}
+
 export interface LaneMatchup {
   position: string;
   blue_champion: string;
@@ -492,6 +499,8 @@ export interface LaneMatchup {
   blue_wins: number;
   red_wins: number;
   games: number;
+  blue_player_stats?: PlayerChampionStats | null;
+  red_player_stats?: PlayerChampionStats | null;
 }
 
 export interface SynergyPair {
@@ -638,6 +647,7 @@ export interface SeriesGame {
 export interface LiveGame {
   match_id: string;
   game_id: string | null;
+  start_time: string;
   league: { name: string; slug: string; image: string };
   block_name: string;
   strategy: { type: string; count: number };

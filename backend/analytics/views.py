@@ -1623,8 +1623,11 @@ class LiveGamesView(APIView):
     def get(self, request):
         from .live import get_live_games_data
 
+        # minimal=true skips expensive computations (predictions, enrichment, players)
+        minimal = request.query_params.get("minimal", "").lower() == "true"
+
         try:
-            games = get_live_games_data()
+            games = get_live_games_data(minimal=minimal)
         except Exception:
             logger.exception("Failed to fetch live games data")
             games = []

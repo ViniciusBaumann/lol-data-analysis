@@ -169,12 +169,31 @@ AL, CBLOL, CCWS, HLL, HW, LCK, LCKC, LCP, LCS, LEC, LFL, LIT, LPL, NLC, ROL, TCL
 ## Model Performance Metrics
 
 ### Prediction Model (train_prediction_model)
-- **winner**: Accuracy, Brier Score, LogLoss
+- **winner**: Accuracy, AUC-ROC, Brier Score, LogLoss
 - **Regressors**: Mean Absolute Error (MAE)
 
 ### Draft Model (train_draft_model)
-- **draft_winner**: Accuracy, Brier Score, LogLoss
+- **draft_winner**: Accuracy, AUC-ROC, Brier Score, LogLoss
 - **Regressors**: Mean Absolute Error (MAE)
+
+## Enhanced Features (v2.0)
+
+### Prediction Model Features
+- **Extended early game**: XP diff @10/15, CS diff @10/15
+- **Objective control**: Heralds, Voidgrubs, First Baron rate
+- **Team momentum**: Performance trend over last 5-10 games
+- **Enhanced H2H**: Average game duration in head-to-head matches
+
+### Draft Model Features
+- **Champion features** (80): Win rate, KDA, kills, deaths, gold/min, damage/min, cs/min, games played per champion-position
+- **Player-champion features** (20): Player-specific win rate and games played on each champion (strongest predictor per IEEE research)
+- **Team context features** (106): Rolling stats, ELO, H2H, per-position stats
+
+### Optuna Hyperparameter Tuning
+- 100 trials (up from 50)
+- 5-fold TimeSeriesSplit cross-validation
+- ROC-AUC scoring for classification (better probability calibration)
+- Extended hyperparameter ranges for better optimization
 
 ## Notes
 
@@ -183,3 +202,4 @@ AL, CBLOL, CCWS, HLL, HW, LCK, LCKC, LCP, LCS, LEC, LFL, LIT, LPL, NLC, ROL, TCL
 - The `--no-tune` flag significantly speeds up training but may produce slightly less optimal models
 - Use `--calibration isotonic` when you have 500+ calibration samples
 - Split decay factor controls how much ELO rating resets between splits (0.75 = 75% of deviation from 1500 is kept)
+- Player-champion win rate was identified as the strongest predictor in IEEE ICOCO 2024 research (97.5% accuracy)

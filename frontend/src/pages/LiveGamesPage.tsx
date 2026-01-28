@@ -1,7 +1,5 @@
 import { Link } from 'react-router-dom';
-import {
-  Radio, RefreshCw, Loader2, Skull, TowerControl, Flame, Crown, Coins,
-} from 'lucide-react';
+import { Radio, RefreshCw, Loader2 } from 'lucide-react';
 import { useLiveGames } from '@/hooks/useLiveGames';
 import { LiveGame } from '@/types';
 
@@ -22,9 +20,14 @@ function boLabel(strategy: { type: string; count: number }): string {
   return '';
 }
 
-function fmtGold(gold: number): string {
-  if (gold >= 1000) return `${(gold / 1000).toFixed(1)}k`;
-  return String(gold);
+function formatStartTime(startTime: string): string {
+  if (!startTime) return '';
+  try {
+    const date = new Date(startTime);
+    return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -40,33 +43,13 @@ function LiveDot() {
   );
 }
 
-function StatPill({ icon, label, blue, red }: {
-  icon: React.ReactNode;
-  label: string;
-  blue: string | number;
-  red: string | number;
-}) {
-  return (
-    <div className="flex items-center justify-between text-xs">
-      <span className="font-semibold text-blue-400 tabular-nums">{blue}</span>
-      <div className="flex items-center gap-1 text-muted-foreground">
-        {icon}
-        <span className="text-[10px] uppercase tracking-wide">{label}</span>
-      </div>
-      <span className="font-semibold text-red-400 tabular-nums">{red}</span>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // LiveGameCard
 // ---------------------------------------------------------------------------
 
 function LiveGameCard({ game }: { game: LiveGame }) {
-  const preds = game.prediction?.predictions ?? null;
   const blueWins = game.blue_team.result?.gameWins ?? 0;
   const redWins = game.red_team.result?.gameWins ?? 0;
-  const hasStats = !!game.live_stats;
 
   return (
     <Link
@@ -83,6 +66,9 @@ function LiveGameCard({ game }: { game: LiveGame }) {
           <span className="text-[11px] text-muted-foreground/60">{game.block_name}</span>
         )}
         <span className="text-[11px] text-muted-foreground/60">{boLabel(game.strategy)}</span>
+        {game.start_time && (
+          <span className="text-[11px] text-muted-foreground/60">{formatStartTime(game.start_time)}</span>
+        )}
         <span className="ml-auto flex items-center gap-1.5">
           <LiveDot />
           <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Live</span>
@@ -119,46 +105,7 @@ function LiveGameCard({ game }: { game: LiveGame }) {
             )}
           </div>
         </div>
-
-        {/* Live team stats (compact) */}
-        {hasStats && (
-          <div className="mt-4 space-y-1.5">
-            <StatPill icon={<Skull size={11} className="text-red-400" />} label="Kills" blue={game.live_stats!.blue_kills} red={game.live_stats!.red_kills} />
-            <StatPill icon={<Coins size={11} className="text-yellow-400" />} label="Gold" blue={fmtGold(game.live_stats!.blue_gold)} red={fmtGold(game.live_stats!.red_gold)} />
-            <StatPill icon={<TowerControl size={11} className="text-sky-400" />} label="Towers" blue={game.live_stats!.blue_towers} red={game.live_stats!.red_towers} />
-            <StatPill icon={<Flame size={11} className="text-orange-400" />} label="Dragons" blue={game.live_stats!.blue_dragons} red={game.live_stats!.red_dragons} />
-            <StatPill icon={<Crown size={11} className="text-purple-400" />} label="Barons" blue={game.live_stats!.blue_barons} red={game.live_stats!.red_barons} />
-          </div>
-        )}
-
-        {/* No stats available */}
-        {!hasStats && !game.stats_enabled && (
-          <p className="text-[10px] text-muted-foreground/50 text-center mt-3">
-            Placar ao vivo indisponivel para esta liga
-          </p>
-        )}
       </div>
-
-      {/* Win probability */}
-      {preds && (
-        <div className="px-4 pb-3">
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-[11px] font-bold">
-              <span className={preds.blue_win_prob > preds.red_win_prob ? 'text-blue-400' : 'text-muted-foreground'}>
-                {preds.blue_win_prob}%
-              </span>
-              <span className="text-muted-foreground text-[10px] uppercase tracking-widest">Win Prob</span>
-              <span className={preds.red_win_prob > preds.blue_win_prob ? 'text-red-400' : 'text-muted-foreground'}>
-                {preds.red_win_prob}%
-              </span>
-            </div>
-            <div className="h-2 rounded-full overflow-hidden flex bg-secondary">
-              <div className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-500" style={{ width: `${preds.blue_win_prob}%` }} />
-              <div className="h-full bg-gradient-to-r from-red-400 to-red-600 transition-all duration-500" style={{ width: `${preds.red_win_prob}%` }} />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Click hint */}
       <div className="px-4 py-2 border-t border-border/50 bg-secondary/10 text-center">
