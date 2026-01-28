@@ -481,10 +481,146 @@ export interface LiveGamePrediction {
   message?: string;
 }
 
+// ---------- Enrichment types ----------
+
+export interface LaneMatchup {
+  position: string;
+  blue_champion: string;
+  red_champion: string;
+  blue_win_rate: number | null;
+  red_win_rate: number | null;
+  blue_wins: number;
+  red_wins: number;
+  games: number;
+}
+
+export interface SynergyPair {
+  champion1: string;
+  position1: string;
+  champion2: string;
+  position2: string;
+  games: number;
+  wins: number;
+  win_rate: number;
+}
+
+export interface ChampionSlotStats {
+  win_rate: number;
+  avg_kda: number;
+  avg_kills: number;
+  avg_deaths: number;
+  avg_gold_per_min: number;
+  avg_damage_per_min: number;
+  avg_cs_per_min: number;
+  games_played: number;
+}
+
+export interface TeamEloInfo {
+  global: number;
+  blue: number;
+  red: number;
+}
+
+export interface TeamContextStats {
+  win_rate: number;
+  avg_kills: number;
+  avg_deaths: number;
+  avg_towers: number;
+  avg_dragons: number;
+  avg_barons: number;
+  first_blood_rate: number;
+  first_tower_rate: number;
+  avg_golddiffat15: number;
+  avg_game_length: number;
+  win_rate_last3: number;
+  win_rate_last5: number;
+  streak: number;
+  blue_win_rate: number;
+  red_win_rate: number;
+}
+
+export interface TeamContextEntry {
+  elo: TeamEloInfo;
+  stats: TeamContextStats | null;
+}
+
+export interface H2HContext {
+  total_games: number;
+  blue_win_rate: number;
+  red_win_rate: number;
+  recent_form_blue: number;
+}
+
+export interface TeamContext {
+  blue_team: TeamContextEntry;
+  red_team: TeamContextEntry;
+  h2h: H2HContext;
+}
+
+export interface MatchPredictionEnriched {
+  blue_win_prob?: number;
+  red_win_prob?: number;
+  total_kills?: number;
+  total_towers?: number;
+  total_dragons?: number;
+  total_barons?: number;
+  game_time?: number;
+  error?: string;
+  features_available?: boolean;
+  models_loaded?: boolean;
+}
+
+export interface LiveGameEnrichment {
+  lane_matchups: LaneMatchup[] | null;
+  synergies: {
+    blue: SynergyPair[];
+    red: SynergyPair[];
+  } | null;
+  champion_stats: Record<string, ChampionSlotStats | null> | null;
+  team_context: TeamContext | null;
+  match_prediction: MatchPredictionEnriched | null;
+}
+
 export interface SeriesGameTeam {
   code: string;
   name: string;
   image: string;
+}
+
+export interface SeriesGameStats {
+  blue_kills: number;
+  red_kills: number;
+  blue_gold: number;
+  red_gold: number;
+  blue_towers: number;
+  red_towers: number;
+  blue_inhibitors: number;
+  red_inhibitors: number;
+  blue_dragons: number;
+  red_dragons: number;
+  blue_barons: number;
+  red_barons: number;
+}
+
+export interface SeriesGamePlayer {
+  participantId: number;
+  side: string;
+  role: string;
+  champion: string;
+  championKey: string;
+  summonerName: string;
+  level: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  creepScore: number;
+  totalGold: number;
+  items: number[];
+}
+
+export interface SeriesGamePlayers {
+  blue: SeriesGamePlayer[];
+  red: SeriesGamePlayer[];
 }
 
 export interface SeriesGame {
@@ -495,6 +631,8 @@ export interface SeriesGame {
   blue_team: SeriesGameTeam;
   red_team: SeriesGameTeam;
   draft: LiveGameDraft | null;
+  final_stats: SeriesGameStats | null;
+  players: SeriesGamePlayers | null;
 }
 
 export interface LiveGame {
@@ -512,12 +650,37 @@ export interface LiveGame {
   live_stats: LiveGameStats | null;
   players: LiveGamePlayers | null;
   prediction: LiveGamePrediction | null;
+  enrichment: LiveGameEnrichment | null;
   series_games: SeriesGame[] | null;
 }
 
 export interface LiveGamesResponse {
   games: LiveGame[];
   count: number;
+}
+
+export interface ScheduleTeam {
+  name: string;
+  code: string;
+  image: string;
+  result: { outcome: string | null; gameWins: number } | null;
+  db_id: number | null;
+}
+
+export interface ScheduleMatch {
+  match_id: string;
+  start_time: string;
+  state: 'unstarted' | 'completed';
+  block_name: string;
+  strategy: { type: string; count: number };
+  league: { name: string; slug: string; image: string };
+  teams: ScheduleTeam[];
+}
+
+export interface ScheduleResponse {
+  upcoming: ScheduleMatch[];
+  live: ScheduleMatch[];
+  completed: ScheduleMatch[];
 }
 
 export interface PaginatedResponse<T> {

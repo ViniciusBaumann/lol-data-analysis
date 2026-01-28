@@ -3,18 +3,11 @@ import {
   Radio, RefreshCw, Loader2, Skull, TowerControl, Flame, Crown, Coins,
 } from 'lucide-react';
 import { useLiveGames } from '@/hooks/useLiveGames';
-import { LiveGame, LiveGameDraft } from '@/types';
-import { cn } from '@/lib/utils';
+import { LiveGame } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const ROLE_LABELS: Record<string, string> = {
-  top: 'TOP', jng: 'JNG', mid: 'MID', bot: 'BOT', sup: 'SUP',
-};
-
-const POSITIONS = ['top', 'jng', 'mid', 'bot', 'sup'] as const;
 
 function timeAgo(date: Date | null): string {
   if (!date) return '';
@@ -106,7 +99,6 @@ function LiveGameCard({ game }: { game: LiveGame }) {
             )}
             <div className="min-w-0">
               <p className="text-sm font-bold text-foreground truncate">{game.blue_team.code}</p>
-              <p className="text-[10px] text-blue-400/70 font-medium">Blue</p>
             </div>
           </div>
 
@@ -121,7 +113,6 @@ function LiveGameCard({ game }: { game: LiveGame }) {
           <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end">
             <div className="min-w-0 text-right">
               <p className="text-sm font-bold text-foreground truncate">{game.red_team.code}</p>
-              <p className="text-[10px] text-red-400/70 font-medium">Red</p>
             </div>
             {game.red_team.image && (
               <img src={game.red_team.image} alt="" className="h-9 w-9 object-contain shrink-0" />
@@ -145,27 +136,6 @@ function LiveGameCard({ game }: { game: LiveGame }) {
           <p className="text-[10px] text-muted-foreground/50 text-center mt-3">
             Placar ao vivo indisponivel para esta liga
           </p>
-        )}
-
-        {/* Draft (always visible) */}
-        {game.draft && (
-          <div className="mt-3 grid grid-cols-[1fr_1fr] gap-x-4 gap-y-0.5">
-            {POSITIONS.map((pos) => (
-              <div key={pos} className="contents">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] font-bold text-blue-400/60 w-5">{ROLE_LABELS[pos]}</span>
-                  <span className="text-[11px] text-foreground">{game.draft![`blue_${pos}` as keyof LiveGameDraft]}</span>
-                </div>
-                <div className="flex items-center gap-1.5 justify-end">
-                  <span className="text-[11px] text-foreground">{game.draft![`red_${pos}` as keyof LiveGameDraft]}</span>
-                  <span className="text-[9px] font-bold text-red-400/60 w-5 text-right">{ROLE_LABELS[pos]}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        {!game.draft && (
-          <p className="text-[10px] text-muted-foreground/50 text-center mt-3">Picks indisponiveis</p>
         )}
       </div>
 
@@ -243,16 +213,16 @@ export default function LiveGamesPage() {
         </div>
       )}
 
-      {/* Empty */}
+      {/* No games */}
       {!loading && !error && games.length === 0 && (
         <div className="text-center py-20 text-muted-foreground/50">
           <Radio size={40} className="mx-auto mb-3 opacity-30" />
-          <p className="text-base font-medium">Nenhum jogo ao vivo</p>
-          <p className="text-sm mt-1">Os jogos aparecerao aqui quando estiverem em andamento.</p>
+          <p className="text-base font-medium">Nenhum jogo ao vivo no momento</p>
+          <p className="text-sm mt-1">Volte mais tarde para acompanhar partidas.</p>
         </div>
       )}
 
-      {/* Games grid */}
+      {/* Live Games */}
       {!loading && games.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {games.map((game) => (

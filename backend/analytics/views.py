@@ -1632,6 +1632,124 @@ class LiveGamesView(APIView):
         return Response({"games": games, "count": len(games)})
 
 
+class ScheduleView(APIView):
+    """API view returning upcoming and recently completed matches from LoL Esports."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from .live import LOL_ESPORTS_API_KEY, LOL_ESPORTS_BASE_URL, match_team_to_db
+
+        try:
+            resp = http_requests.get(
+                f"{LOL_ESPORTS_BASE_URL}/getSchedule",
+                params={"hl": "pt-BR"},
+                headers={"x-api-key": LOL_ESPORTS_API_KEY},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            api_data = resp.json()
+        except Exception:
+            logger.exception("Failed to fetch LoL Esports schedule")
+            return Response({"upcoming": [], "completed": []})
+
+        schedule = api_data.get("data", {}).get("schedule", {})
+        raw_events = schedule.get("events", [])
+
+        upcoming = []
+        completed = []
+
+        live = []
+
+        for ev in raw_events:
+            state = ev.get("state", "")
+            if state not in ("unstarted", "inProgress", "completed"):
+                continue
+
+            match_data = ev.get("match", {})
+            teams_raw = match_data.get("teams", [])
+
+            # Skip TBD teams
+            has_tbd = any(
+                not t.get("name", "").strip()
+                or t.get("name", "").strip().upper() == "TBD"
+                or not t.get("code", "").strip()
+                or t.get("code", "").strip().upper() == "TBD"
+                for t in teams_raw
+            )
+            if has_tbd:
+                continue
+
+            league_data = ev.get("league", {})
+            teams = []
+            for t in teams_raw:
+                db_id = match_team_to_db(t.get("code", ""), t.get("name", ""))
+                teams.append({
+                    "name": t.get("name", ""),
+                    "code": t.get("code", ""),
+                    "image": t.get("image", ""),
+                    "result": t.get("result"),
+                    "db_id": db_id,
+                })
+
+            # Check games within the match to determine actual state
+            games = match_data.get("games", [])
+            has_game_in_progress = any(g.get("state") == "inProgress" for g in games)
+
+            # For Bo3/Bo5, check if series is actually complete
+            strategy = match_data.get("strategy", {})
+            strategy_type = strategy.get("type", "")
+            strategy_count = strategy.get("count", 1)
+            wins_needed = (strategy_count // 2) + 1 if strategy_type == "bestOf" else 1
+
+            team1_wins = teams_raw[0].get("result", {}).get("gameWins", 0) if teams_raw else 0
+            team2_wins = teams_raw[1].get("result", {}).get("gameWins", 0) if len(teams_raw) > 1 else 0
+            series_finished = team1_wins >= wins_needed or team2_wins >= wins_needed
+
+            # Determine actual state
+            if has_game_in_progress:
+                actual_state = "inProgress"
+            elif state == "completed" and series_finished:
+                actual_state = "completed"
+            elif state == "completed" and not series_finished:
+                # Series not finished but marked completed - likely between games
+                actual_state = "inProgress"
+            else:
+                actual_state = state
+
+            event_data = {
+                "match_id": match_data.get("id", ""),
+                "start_time": ev.get("startTime", ""),
+                "state": actual_state,
+                "block_name": ev.get("blockName", ""),
+                "strategy": strategy,
+                "league": {
+                    "name": league_data.get("name", ""),
+                    "slug": league_data.get("slug", ""),
+                    "image": league_data.get("image", ""),
+                },
+                "teams": teams,
+            }
+
+            if actual_state == "unstarted":
+                upcoming.append(event_data)
+            elif actual_state == "inProgress":
+                live.append(event_data)
+            elif actual_state == "completed":
+                completed.append(event_data)
+
+        # Sort: upcoming by start time ascending, others by start time descending
+        upcoming.sort(key=lambda e: e["start_time"])
+        live.sort(key=lambda e: e["start_time"], reverse=True)
+        completed.sort(key=lambda e: e["start_time"], reverse=True)
+
+        return Response({
+            "upcoming": upcoming[:20],
+            "live": live[:20],
+            "completed": completed[:20],
+        })
+
+
 class EloRatingsView(APIView):
     """API view returning ELO ratings for teams, optionally filtered by league."""
 

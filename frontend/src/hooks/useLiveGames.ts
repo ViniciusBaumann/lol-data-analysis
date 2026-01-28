@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { LiveGame } from '@/types';
 import { getLiveGames } from '@/services/live';
 
-const POLL_INTERVAL = 30_000;
+const POLL_INTERVAL = 60_000; // 1 minute for list view
 
 export function useLiveGames() {
   const [games, setGames] = useState<LiveGame[]>([]);
