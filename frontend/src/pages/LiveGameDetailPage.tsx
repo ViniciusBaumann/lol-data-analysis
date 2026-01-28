@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Radio, RefreshCw, Loader2, ChevronLeft } from 'lucide-react';
 import { useLiveGameDetail } from '@/hooks/useLiveGameDetail';
@@ -116,6 +116,13 @@ interface GameContentProps {
 }
 
 const GameContent = memo(function GameContent({ game }: GameContentProps) {
+  // State to track which completed game is selected (null = show live game)
+  const [selectedGameNumber, setSelectedGameNumber] = useState<number | null>(null);
+
+  const handleSelectGame = useCallback((gameNumber: number | null) => {
+    setSelectedGameNumber(gameNumber);
+  }, []);
+
   const hasSeries = game.series_games && game.series_games.length > 1;
   const hasPlayers = game.players && (game.players.blue.length > 0 || game.players.red.length > 0);
   const preds = game.prediction?.predictions ?? null;
@@ -131,8 +138,11 @@ const GameContent = memo(function GameContent({ game }: GameContentProps) {
   // Check if game is awaiting start (no draft and no live stats)
   const isAwaitingStart = !isCurrentGameCompleted && !game.draft && !game.live_stats;
 
-  // Check if enrichment panels should show
-  const hasEnrichment = game.enrichment && !isCurrentGameCompleted;
+  // When a completed game is selected, hide all live/analytics panels
+  const isViewingCompletedGame = selectedGameNumber !== null;
+
+  // Check if enrichment panels should show (only for live game view)
+  const hasEnrichment = game.enrichment && !isCurrentGameCompleted && !isViewingCompletedGame;
   const hasLaneMatchups = game.enrichment?.lane_matchups && game.enrichment.lane_matchups.length > 0;
   const hasPlayerChampionHistory = game.enrichment?.lane_matchups?.some(
     mu => mu.blue_player_stats || mu.red_player_stats
@@ -140,7 +150,7 @@ const GameContent = memo(function GameContent({ game }: GameContentProps) {
   const hasSynergies = game.enrichment?.synergies &&
     (game.enrichment.synergies.blue.length > 0 || game.enrichment.synergies.red.length > 0);
   const hasTeamContext = !!game.enrichment?.team_context;
-  const showAnalyticsPanels = hasLaneMatchups || hasPlayerChampionHistory || hasSynergies || hasTeamContext;
+  const showAnalyticsPanels = !isViewingCompletedGame && (hasLaneMatchups || hasPlayerChampionHistory || hasSynergies || hasTeamContext);
 
   return (
     <>
@@ -148,79 +158,91 @@ const GameContent = memo(function GameContent({ game }: GameContentProps) {
       {hasSeries && <SeriesHeader game={game} />}
 
       {/* Series Timeline */}
-      {hasSeries && <SeriesTimeline games={game.series_games!} ddragonVersion={game.ddragon_version} />}
+      {hasSeries && (
+        <SeriesTimeline
+          games={game.series_games!}
+          ddragonVersion={game.ddragon_version}
+          selectedGameNumber={selectedGameNumber}
+          onSelectGame={handleSelectGame}
+        />
+      )}
 
-      {/* Awaiting Start - Show spinner when no draft and no live stats */}
-      {isAwaitingStart && <AwaitingStartPanel game={game} />}
-
-      {/* Game content - only show when not awaiting start */}
-      {!isAwaitingStart && (
+      {/* Only show live content when NOT viewing a completed game */}
+      {!isViewingCompletedGame && (
         <>
-          {/* Live Scoreboard (main content for live games) */}
-          {!isCurrentGameCompleted && showLivePlayerTables && (
-            <GameScoreboard game={game} ddragonVersion={game.ddragon_version} />
-          )}
+          {/* Awaiting Start - Show spinner when no draft and no live stats */}
+          {isAwaitingStart && <AwaitingStartPanel game={game} />}
 
-          {/* Win Probability (below scoreboard) */}
-          {!isCurrentGameCompleted && preds && (
-            <WinProbBar blueProb={preds.blue_win_prob} redProb={preds.red_win_prob} />
-          )}
-
-          {/* Predictions message */}
-          {!isCurrentGameCompleted && !preds && game.draft && game.prediction?.message && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
-              <p className="text-xs text-zinc-500 text-center">{game.prediction.message}</p>
-            </div>
-          )}
-
-          {/* Predictions estimates */}
-          {!isCurrentGameCompleted && preds && (
-            <ModelEstimatesPanel predictions={preds} />
-          )}
-
-          {/* Analytics Enrichment */}
-          {hasEnrichment && (
+          {/* Game content - only show when not awaiting start */}
+          {!isAwaitingStart && (
             <>
-              {/* Prediction Comparison (draft model vs team model) */}
-              {preds && game.enrichment!.match_prediction && (
-                <PredictionComparisonPanel
-                  draftPred={preds}
-                  matchPred={game.enrichment!.match_prediction}
-                />
+              {/* Live Scoreboard (main content for live games) */}
+              {!isCurrentGameCompleted && showLivePlayerTables && (
+                <GameScoreboard game={game} ddragonVersion={game.ddragon_version} />
               )}
 
-              {/* Lane Matchups + Synergies (left) | Team Context (right) */}
-              {showAnalyticsPanels && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {/* Left column: Lane Matchups + Player History + Synergies stacked */}
-                  <div className="flex flex-col gap-4">
-                    {hasLaneMatchups && (
-                      <LaneMatchupsPanel matchups={game.enrichment!.lane_matchups!} />
-                    )}
-                    {hasPlayerChampionHistory && (
-                      <PlayerChampionHistoryPanel matchups={game.enrichment!.lane_matchups!} />
-                    )}
-                    {hasSynergies && (
-                      <SynergiesPanel synergies={game.enrichment!.synergies!} />
-                    )}
-                  </div>
+              {/* Win Probability (below scoreboard) */}
+              {!isCurrentGameCompleted && preds && (
+                <WinProbBar blueProb={preds.blue_win_prob} redProb={preds.red_win_prob} />
+              )}
 
-                  {/* Right column: Team Context */}
-                  {hasTeamContext && (
-                    <TeamContextPanel context={game.enrichment!.team_context!} />
+              {/* Predictions message */}
+              {!isCurrentGameCompleted && !preds && game.draft && game.prediction?.message && (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
+                  <p className="text-xs text-zinc-500 text-center">{game.prediction.message}</p>
+                </div>
+              )}
+
+              {/* Predictions estimates */}
+              {!isCurrentGameCompleted && preds && (
+                <ModelEstimatesPanel predictions={preds} />
+              )}
+
+              {/* Analytics Enrichment */}
+              {hasEnrichment && (
+                <>
+                  {/* Prediction Comparison (draft model vs team model) */}
+                  {preds && game.enrichment!.match_prediction && (
+                    <PredictionComparisonPanel
+                      draftPred={preds}
+                      matchPred={game.enrichment!.match_prediction}
+                    />
                   )}
+
+                  {/* Lane Matchups + Synergies (left) | Team Context (right) */}
+                  {showAnalyticsPanels && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {/* Left column: Lane Matchups + Player History + Synergies stacked */}
+                      <div className="flex flex-col gap-4">
+                        {hasLaneMatchups && (
+                          <LaneMatchupsPanel matchups={game.enrichment!.lane_matchups!} />
+                        )}
+                        {hasPlayerChampionHistory && (
+                          <PlayerChampionHistoryPanel matchups={game.enrichment!.lane_matchups!} />
+                        )}
+                        {hasSynergies && (
+                          <SynergiesPanel synergies={game.enrichment!.synergies!} />
+                        )}
+                      </div>
+
+                      {/* Right column: Team Context */}
+                      {hasTeamContext && (
+                        <TeamContextPanel context={game.enrichment!.team_context!} />
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* No stats message - only show if stats not enabled for this league */}
+              {!isCurrentGameCompleted && !game.live_stats && !game.stats_enabled && game.draft && (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
+                  <p className="text-xs text-zinc-600 text-center">
+                    Placar ao vivo indisponivel para esta liga
+                  </p>
                 </div>
               )}
             </>
-          )}
-
-          {/* No stats message - only show if stats not enabled for this league */}
-          {!isCurrentGameCompleted && !game.live_stats && !game.stats_enabled && game.draft && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
-              <p className="text-xs text-zinc-600 text-center">
-                Placar ao vivo indisponivel para esta liga
-              </p>
-            </div>
           )}
         </>
       )}

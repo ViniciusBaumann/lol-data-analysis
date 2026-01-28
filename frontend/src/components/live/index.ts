@@ -2,6 +2,7 @@
 export { GameScoreboard, HealthBar, PlayerRow } from './GameScoreboard';
 export { SeriesHeader } from './SeriesHeader';
 export { CompletedGameSummary } from './CompletedGameSummary';
+export { CompletedGameScoreboard } from './CompletedGameScoreboard';
 export { DraftDisplay } from './DraftDisplay';
 
 // UI components

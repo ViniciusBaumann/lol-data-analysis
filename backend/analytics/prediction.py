@@ -301,7 +301,7 @@ def build_matchup_features(team1_id: int, team2_id: int, league_id: int | None =
         league_id: Optional league ID for league-specific ELO.
 
     Returns:
-        numpy array of 93 features, or None if insufficient data.
+        numpy array of 132 features, or None if insufficient data.
     """
     f1 = compute_team_features(team1_id)
     f2 = compute_team_features(team2_id)
@@ -311,17 +311,21 @@ def build_matchup_features(team1_id: int, team2_id: int, league_id: int | None =
 
     h2h = compute_h2h_features(team1_id, team2_id)
 
+    # 27 team features - must match get_feature_names() and training
     feature_keys = [
         "win_rate", "avg_kills", "avg_deaths", "avg_towers", "avg_dragons",
-        "avg_barons", "avg_inhibitors", "first_blood_rate", "first_tower_rate",
-        "first_dragon_rate", "first_herald_rate", "avg_golddiffat10",
-        "avg_golddiffat15", "avg_game_length",
-        "win_rate_last3", "win_rate_last5", "streak", "blue_win_rate", "red_win_rate",
+        "avg_barons", "avg_heralds", "avg_voidgrubs", "avg_inhibitors",
+        "first_blood_rate", "first_tower_rate", "first_dragon_rate",
+        "first_herald_rate", "first_baron_rate",
+        "avg_golddiffat10", "avg_golddiffat15",
+        "avg_xpdiffat10", "avg_xpdiffat15", "avg_csdiffat10", "avg_csdiffat15",
+        "avg_game_length", "win_rate_last3", "win_rate_last5",
+        "streak", "momentum", "blue_win_rate", "red_win_rate",
     ]
 
-    # Team 1 features
+    # Team 1 features (27)
     t1_features = [f1[k] for k in feature_keys]
-    # Team 2 features
+    # Team 2 features (27)
     t2_features = [f2[k] for k in feature_keys]
 
     # Differential features (team1 - team2) - extended with early game features
