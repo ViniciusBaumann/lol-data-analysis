@@ -12,6 +12,7 @@ export { AwaitingStartPanel } from './AwaitingStartPanel';
 
 // Analytics panels
 export { LaneMatchupsPanel } from './LaneMatchupsPanel';
+export { PlayerChampionHistoryPanel } from './PlayerChampionHistoryPanel';
 export { TeamContextPanel } from './TeamContextPanel';
 export { SynergiesPanel } from './SynergiesPanel';
 export { PredictionComparisonPanel } from './PredictionComparisonPanel';

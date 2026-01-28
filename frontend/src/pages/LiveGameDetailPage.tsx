@@ -10,6 +10,7 @@ import {
   WinProbBar,
   AwaitingStartPanel,
   LaneMatchupsPanel,
+  PlayerChampionHistoryPanel,
   TeamContextPanel,
   SynergiesPanel,
   PredictionComparisonPanel,
@@ -133,10 +134,13 @@ const GameContent = memo(function GameContent({ game }: GameContentProps) {
   // Check if enrichment panels should show
   const hasEnrichment = game.enrichment && !isCurrentGameCompleted;
   const hasLaneMatchups = game.enrichment?.lane_matchups && game.enrichment.lane_matchups.length > 0;
+  const hasPlayerChampionHistory = game.enrichment?.lane_matchups?.some(
+    mu => mu.blue_player_stats || mu.red_player_stats
+  );
   const hasSynergies = game.enrichment?.synergies &&
     (game.enrichment.synergies.blue.length > 0 || game.enrichment.synergies.red.length > 0);
   const hasTeamContext = !!game.enrichment?.team_context;
-  const showAnalyticsPanels = hasLaneMatchups || hasSynergies || hasTeamContext;
+  const showAnalyticsPanels = hasLaneMatchups || hasPlayerChampionHistory || hasSynergies || hasTeamContext;
 
   return (
     <>
@@ -188,10 +192,13 @@ const GameContent = memo(function GameContent({ game }: GameContentProps) {
               {/* Lane Matchups + Synergies (left) | Team Context (right) */}
               {showAnalyticsPanels && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {/* Left column: Lane Matchups + Synergies stacked */}
+                  {/* Left column: Lane Matchups + Player History + Synergies stacked */}
                   <div className="flex flex-col gap-4">
                     {hasLaneMatchups && (
                       <LaneMatchupsPanel matchups={game.enrichment!.lane_matchups!} />
+                    )}
+                    {hasPlayerChampionHistory && (
+                      <PlayerChampionHistoryPanel matchups={game.enrichment!.lane_matchups!} />
                     )}
                     {hasSynergies && (
                       <SynergiesPanel synergies={game.enrichment!.synergies!} />
