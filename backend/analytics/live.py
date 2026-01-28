@@ -26,6 +26,10 @@ _http_session: http_requests.Session | None = None
 _live_events_cache: dict = {"data": None, "timestamp": None}
 _CACHE_TTL_SECONDS = 2  # Cache live events for 2 seconds (detail page polls every 5s)
 
+# Persistent state cache for live game data (survives between requests)
+# Key: game_id, Value: {"live_stats": {...}, "players": {...}, "last_updated": datetime}
+_live_game_state_cache: dict[str, dict] = {}
+
 
 def _get_http_session() -> http_requests.Session:
     """Get or create a reusable HTTP session with connection pooling."""
@@ -500,11 +504,29 @@ def _is_draft_complete(draft: dict[str, str]) -> bool:
 
 
 def fetch_game_data(game_id: str) -> dict:
-    """Fetch draft, live stats, and per-player data for an in-progress game."""
+    """Fetch draft, live stats, and per-player data for an in-progress game.
+
+    Uses persistent state cache to avoid losing data when API returns empty responses.
+    Only updates cached state when new data is received with actual changes.
+    """
     _ensure_champion_map()
+
+    # Get cached state for this game (if any)
+    cached_state = _live_game_state_cache.get(game_id, {})
 
     window = _fetch_window(game_id)
     if window is None:
+        # No window data - return cached state if available
+        if cached_state:
+            logger.debug("Using cached state for game %s (no window data)", game_id)
+            return {
+                "draft": cached_state.get("draft"),
+                "live_stats": cached_state.get("live_stats"),
+                "players": cached_state.get("players"),
+                "patch_version": cached_state.get("patch_version", ""),
+                "ddragon_version": cached_state.get("ddragon_version", _ddragon_version),
+                "team_ids": cached_state.get("team_ids", {"blue": None, "red": None}),
+            }
         return {"draft": None, "live_stats": None, "players": None, "patch_version": "", "ddragon_version": _ddragon_version, "team_ids": {"blue": None, "red": None}}
 
     patch_version = window.get("gameMetadata", {}).get("patchVersion", "")
@@ -592,14 +614,84 @@ def fetch_game_data(game_id: str) -> dict:
         )
         players_data = {"blue": blue_players, "red": red_players}
 
-    return {
-        "draft": draft if _is_draft_complete(draft) else None,
+    # Prepare result
+    complete_draft = draft if _is_draft_complete(draft) else None
+    result = {
+        "draft": complete_draft,
         "live_stats": live_stats,
         "players": players_data,
         "patch_version": patch_version,
         "ddragon_version": _ddragon_version,
         "team_ids": team_ids,
     }
+
+    # Merge with cached state - keep cached values if new data is empty/missing
+    merged_from_cache = False
+    if cached_state:
+        # Use cached draft if new draft is incomplete
+        if result["draft"] is None and cached_state.get("draft"):
+            result["draft"] = cached_state["draft"]
+            merged_from_cache = True
+
+        # Merge live_stats - keep cached non-zero values if new values are zero
+        cached_stats = cached_state.get("live_stats")
+        if cached_stats and result["live_stats"]:
+            for key in result["live_stats"]:
+                new_val = result["live_stats"].get(key)
+                cached_val = cached_stats.get(key)
+                # Keep cached value if new value is None or 0 but cached is non-zero
+                if (new_val is None or new_val == 0) and cached_val and cached_val != 0:
+                    result["live_stats"][key] = cached_val
+        elif cached_stats and result["live_stats"] is None:
+            result["live_stats"] = cached_stats
+
+        # Merge players data - keep cached player data if new is empty
+        cached_players = cached_state.get("players")
+        if cached_players:
+            if result["players"] is None:
+                result["players"] = cached_players
+            elif result["players"]:
+                # Merge individual player stats
+                for side in ("blue", "red"):
+                    new_side = result["players"].get(side, [])
+                    cached_side = cached_players.get(side, [])
+                    for i, player in enumerate(new_side):
+                        if i < len(cached_side):
+                            cached_player = cached_side[i]
+                            # Keep cached items if new items are empty
+                            if not player.get("items") and cached_player.get("items"):
+                                player["items"] = cached_player["items"]
+                            # Keep cached gold/health if new values seem reset
+                            if player.get("totalGold", 0) == 0 and cached_player.get("totalGold", 0) > 0:
+                                player["totalGold"] = cached_player["totalGold"]
+                            if player.get("currentHealth", 0) == 0 and cached_player.get("currentHealth", 0) > 0:
+                                player["currentHealth"] = cached_player["currentHealth"]
+                                player["maxHealth"] = cached_player.get("maxHealth", player.get("maxHealth", 0))
+
+    if merged_from_cache:
+        logger.debug("Merged cached state for game %s", game_id)
+
+    # Update cache with merged result
+    _live_game_state_cache[game_id] = {
+        "draft": result["draft"],
+        "live_stats": result["live_stats"],
+        "players": result["players"],
+        "patch_version": result["patch_version"],
+        "ddragon_version": result["ddragon_version"],
+        "team_ids": result["team_ids"],
+        "last_updated": datetime.now(timezone.utc),
+    }
+
+    # Clean up old cache entries (games older than 2 hours)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
+    stale_keys = [
+        k for k, v in _live_game_state_cache.items()
+        if v.get("last_updated", cutoff) < cutoff
+    ]
+    for k in stale_keys:
+        del _live_game_state_cache[k]
+
+    return result
 
 
 def fetch_completed_game_data(game_id: str) -> dict:
