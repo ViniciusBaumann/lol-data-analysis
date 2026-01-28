@@ -206,6 +206,10 @@ export interface CompareMatchDetail {
   game_length: number | null;
   kill_diff: number;
   tower_diff: number;
+  opp_kills: number;
+  opp_towers: number;
+  opp_dragons: number;
+  opp_barons: number;
 }
 
 export interface CompareFaceoffMatchTeam {
@@ -233,6 +237,13 @@ export interface CompareFaceoffMatch {
   league: string;
   team1: CompareFaceoffMatchTeam;
   team2: CompareFaceoffMatchTeam;
+}
+
+export interface CompareEloData {
+  global: number;
+  blue: number;
+  red: number;
+  last_change: number;
 }
 
 export interface CompareData {
@@ -271,6 +282,10 @@ export interface CompareData {
     team1: CompareTeamRates;
     team2: CompareTeamRates;
     matches: CompareFaceoffMatch[];
+  };
+  elo?: {
+    team1: CompareEloData | null;
+    team2: CompareEloData | null;
   };
 }
 

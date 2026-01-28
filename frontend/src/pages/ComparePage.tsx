@@ -5,6 +5,8 @@ import {
   Search,
   X,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Check,
   Minus,
   ArrowLeftRight,
@@ -21,6 +23,7 @@ import {
   CompareMatchDetail,
   CompareFaceoffMatch,
   CompareFaceoffMatchTeam,
+  CompareEloData,
 } from '@/types';
 import { Loading } from '@/components/common/Loading';
 import { ErrorMessage } from '@/components/common/ErrorMessage';
@@ -65,6 +68,17 @@ const TAB_PREDICTION_MAP: Record<string, keyof MatchPredictions> = {
   avg_game_length: 'game_time',
 };
 
+// Tabs that should show match average (total per match)
+const MATCH_AVG_TABS = new Set(['avg_kills', 'avg_towers', 'avg_dragons', 'avg_barons', 'avg_game_length']);
+
+// Map matchField to opponent field for calculating match totals
+const MATCH_TOTAL_FIELDS: Record<string, string> = {
+  kills: 'opp_kills',
+  towers: 'opp_towers',
+  dragons: 'opp_dragons',
+  barons: 'opp_barons',
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -80,6 +94,37 @@ function formatDiff(val: number): string {
   if (val > 0) return `+${val.toFixed(1)}`;
   if (val < 0) return val.toFixed(1);
   return '0.0';
+}
+
+function calculateMatchAverage(
+  matches: CompareMatchDetail[],
+  field: string,
+  count: number
+): number | null {
+  const relevantMatches = matches.slice(0, count);
+  if (relevantMatches.length === 0) return null;
+
+  const oppField = MATCH_TOTAL_FIELDS[field];
+
+  // For game_length, just return the average (it's the same for both teams)
+  if (field === 'game_length') {
+    const validMatches = relevantMatches.filter(m => m.game_length != null);
+    if (validMatches.length === 0) return null;
+    const sum = validMatches.reduce((acc, m) => acc + (m.game_length || 0), 0);
+    return sum / validMatches.length;
+  }
+
+  // For other fields, sum team + opponent values
+  if (!oppField) return null;
+
+  let total = 0;
+  for (const match of relevantMatches) {
+    const teamVal = (match as Record<string, unknown>)[field] as number || 0;
+    const oppVal = (match as Record<string, unknown>)[oppField] as number || 0;
+    total += teamVal + oppVal;
+  }
+
+  return total / relevantMatches.length;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -104,11 +149,22 @@ function getStatValue(rates: CompareTeamRates, tab: StatTabConfig): string {
   return String(val);
 }
 
+// Map stat fields to their opponent equivalents
+const OPP_FIELD_MAP: Record<string, string> = {
+  kills: 'opp_kills',
+  towers: 'opp_towers',
+  dragons: 'opp_dragons',
+  barons: 'opp_barons',
+};
+
 function getMatchValue(
   match: Record<string, unknown>,
   tab: StatTabConfig
-): { display: string; success: boolean | null } {
+): { display: string; success: boolean | null; oppDisplay?: string } {
   const val = match[tab.matchField as string];
+  const oppField = OPP_FIELD_MAP[tab.matchField as string];
+  const oppVal = oppField ? match[oppField] : undefined;
+
   if (tab.type === 'rate') {
     return { display: '', success: val === true };
   }
@@ -119,7 +175,9 @@ function getMatchValue(
     const n = val as number;
     return { display: formatDiff(n), success: null };
   }
-  return { display: String(val ?? '--'), success: null };
+  // For avg types, include opponent value
+  const oppDisplay = oppVal !== undefined ? String(oppVal) : undefined;
+  return { display: String(val ?? '--'), success: null, oppDisplay };
 }
 
 // ---------------------------------------------------------------------------
@@ -500,6 +558,90 @@ function PredictionBadge({
 }
 
 // ---------------------------------------------------------------------------
+// Elo Comparison Component
+// ---------------------------------------------------------------------------
+
+function EloComparison({
+  team1Elo,
+  team2Elo,
+  team1Name,
+  team2Name,
+}: {
+  team1Elo: CompareEloData | null;
+  team2Elo: CompareEloData | null;
+  team1Name: string;
+  team2Name: string;
+}) {
+  if (!team1Elo && !team2Elo) return null;
+
+  const t1Global = team1Elo?.global ?? 1500;
+  const t2Global = team2Elo?.global ?? 1500;
+  const t1Blue = team1Elo?.blue ?? 1500;
+  const t2Blue = team2Elo?.blue ?? 1500;
+  const t1Red = team1Elo?.red ?? 1500;
+  const t2Red = team2Elo?.red ?? 1500;
+
+  const t1Better = t1Global > t2Global;
+  const t2Better = t2Global > t1Global;
+
+  return (
+    <div className="mb-5 p-4 bg-gradient-to-r from-blue-500/5 via-transparent to-red-500/5 rounded-lg border border-border">
+      <div className="flex items-center justify-center gap-2 mb-4">
+        <span className="text-sm">📊</span>
+        <span className="text-xs text-muted-foreground uppercase font-medium tracking-wide">
+          Elo Rating
+        </span>
+      </div>
+
+      {/* Two columns - one for each team */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Team 1 */}
+        <div className="text-center space-y-2">
+          <p className="text-[10px] text-blue-400 uppercase font-medium">{team1Name}</p>
+          <p className={cn(
+            'text-2xl font-bold',
+            t1Better ? 'text-blue-400' : 'text-foreground'
+          )}>
+            {t1Global.toFixed(0)}
+          </p>
+          <div className="flex justify-center gap-3 mt-2">
+            <div className="bg-blue-500/10 rounded px-2 py-1">
+              <p className="text-[8px] text-blue-400 uppercase">Blue</p>
+              <p className="text-xs font-bold text-foreground">{t1Blue.toFixed(0)}</p>
+            </div>
+            <div className="bg-red-500/10 rounded px-2 py-1">
+              <p className="text-[8px] text-red-400 uppercase">Red</p>
+              <p className="text-xs font-bold text-foreground">{t1Red.toFixed(0)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Team 2 */}
+        <div className="text-center space-y-2">
+          <p className="text-[10px] text-red-400 uppercase font-medium">{team2Name}</p>
+          <p className={cn(
+            'text-2xl font-bold',
+            t2Better ? 'text-red-400' : 'text-foreground'
+          )}>
+            {t2Global.toFixed(0)}
+          </p>
+          <div className="flex justify-center gap-3 mt-2">
+            <div className="bg-blue-500/10 rounded px-2 py-1">
+              <p className="text-[8px] text-blue-400 uppercase">Blue</p>
+              <p className="text-xs font-bold text-foreground">{t2Blue.toFixed(0)}</p>
+            </div>
+            <div className="bg-red-500/10 rounded px-2 py-1">
+              <p className="text-[8px] text-red-400 uppercase">Red</p>
+              <p className="text-xs font-bold text-foreground">{t2Red.toFixed(0)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Prediction Card Component
 // ---------------------------------------------------------------------------
 
@@ -664,17 +806,24 @@ function PredictionCard({
 // ---------------------------------------------------------------------------
 
 export default function ComparePage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [team1, setTeam1] = useState<Team | null>(null);
   const [team2, setTeam2] = useState<Team | null>(null);
   const [activeTab, setActiveTab] = useState('win_rate');
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const [matchPage, setMatchPage] = useState(1);
+  const MATCHES_PER_PAGE = 10;
 
   // Load teams from URL params (?team1=...&team2=...)
   useEffect(() => {
     const t1Param = searchParams.get('team1');
     const t2Param = searchParams.get('team2');
-    if (!t1Param && !t2Param) return;
+
+    if (!t1Param && !t2Param) {
+      setInitialLoadDone(true);
+      return;
+    }
 
     async function loadFromParam(param: string): Promise<Team | null> {
       const id = Number(param);
@@ -708,11 +857,40 @@ export default function ComparePage() {
       ]);
       if (t1) setTeam1(t1);
       if (t2) setTeam2(t2);
+      setInitialLoadDone(true);
     }
 
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Sync URL params when teams change
+  useEffect(() => {
+    if (!initialLoadDone) return;
+
+    const newParams = new URLSearchParams();
+    if (team1) {
+      newParams.set('team1', team1.name);
+    }
+    if (team2) {
+      newParams.set('team2', team2.name);
+    }
+
+    // Only update if params actually changed
+    const currentT1 = searchParams.get('team1');
+    const currentT2 = searchParams.get('team2');
+    const newT1 = newParams.get('team1');
+    const newT2 = newParams.get('team2');
+
+    if (currentT1 !== newT1 || currentT2 !== newT2) {
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [team1, team2, initialLoadDone, searchParams, setSearchParams]);
+
+  // Reset match page when teams change
+  useEffect(() => {
+    setMatchPage(1);
+  }, [team1?.id, team2?.id]);
 
   const team1Id = team1?.id ?? null;
   const team2Id = team2?.id ?? null;
@@ -817,6 +995,16 @@ export default function ComparePage() {
                 </h3>
               </div>
               <div className="p-4 space-y-6">
+                {/* Elo Rating Comparison */}
+                {data.elo && (
+                  <EloComparison
+                    team1Elo={data.elo.team1}
+                    team2Elo={data.elo.team2}
+                    team1Name={data.team1_info.short_name || data.team1_info.name}
+                    team2Name={data.team2_info.short_name || data.team2_info.name}
+                  />
+                )}
+
                 {/* ML Prediction for this stat */}
                 {prediction?.predictions && TAB_PREDICTION_MAP[currentTab.key] && (
                   <PredictionBadge
@@ -904,6 +1092,26 @@ export default function ComparePage() {
                     team2Name={data.team2_info.short_name || data.team2_info.name}
                     type={currentTab.type}
                   />
+                  {/* Match Average for Totals/Duration tabs */}
+                  {MATCH_AVG_TABS.has(currentTab.key) && data.recent.team1?.matches && (
+                    (() => {
+                      const avg = calculateMatchAverage(
+                        data.recent.team1.matches,
+                        currentTab.matchField as string,
+                        5
+                      );
+                      if (avg === null) return null;
+                      const display = currentTab.type === 'duration'
+                        ? formatDuration(avg)
+                        : avg.toFixed(1);
+                      return (
+                        <div className="mt-2 flex items-center justify-center gap-2 px-3 py-1.5 rounded bg-secondary/50">
+                          <span className="text-[10px] text-muted-foreground uppercase">Avg/Match:</span>
+                          <span className="text-sm font-bold text-primary">{display}</span>
+                        </div>
+                      );
+                    })()
+                  )}
                   {FIRST_TABS.has(currentTab.key) && data.recent.team1?.last5?.side_stats && data.recent.team2?.last5?.side_stats && (
                     <SideBreakdownBars
                       team1Stats={data.recent.team1.last5.side_stats}
@@ -929,6 +1137,26 @@ export default function ComparePage() {
                     team2Name={data.team2_info.short_name || data.team2_info.name}
                     type={currentTab.type}
                   />
+                  {/* Match Average for Totals/Duration tabs */}
+                  {MATCH_AVG_TABS.has(currentTab.key) && data.recent.team1?.matches && (
+                    (() => {
+                      const avg = calculateMatchAverage(
+                        data.recent.team1.matches,
+                        currentTab.matchField as string,
+                        10
+                      );
+                      if (avg === null) return null;
+                      const display = currentTab.type === 'duration'
+                        ? formatDuration(avg)
+                        : avg.toFixed(1);
+                      return (
+                        <div className="mt-2 flex items-center justify-center gap-2 px-3 py-1.5 rounded bg-secondary/50">
+                          <span className="text-[10px] text-muted-foreground uppercase">Avg/Match:</span>
+                          <span className="text-sm font-bold text-primary">{display}</span>
+                        </div>
+                      );
+                    })()
+                  )}
                   {FIRST_TABS.has(currentTab.key) && data.recent.team1?.last10?.side_stats && data.recent.team2?.last10?.side_stats && (
                     <SideBreakdownBars
                       team1Stats={data.recent.team1.last10.side_stats}
@@ -949,101 +1177,161 @@ export default function ComparePage() {
                   </p>
                   <div className="space-y-0">
                     {/* Header */}
-                    <div className="grid grid-cols-2 gap-3 pb-2 border-b border-border/50">
+                    <div className="grid grid-cols-[1fr_auto_1fr] gap-2 pb-2 border-b border-border/50">
                       <span className="text-xs font-medium text-blue-400 text-center">
                         {data.team1_info.short_name || data.team1_info.name}
                       </span>
+                      <div className="w-px bg-border/60" />
                       <span className="text-xs font-medium text-red-400 text-center">
                         {data.team2_info.short_name || data.team2_info.name}
                       </span>
                     </div>
-                    {/* Rows - show each team's recent match with opponent */}
+                    {/* Rows - show each team's recent match with opponent (paginated) */}
                     {(() => {
                       const t1m = data.recent.team1?.matches ?? [];
                       const t2m = data.recent.team2?.matches ?? [];
-                      return Array.from(
-                        { length: Math.max(t1m.length, t2m.length) },
-                        (_, i) => {
-                        const m1 = t1m[i];
-                        const m2 = t2m[i];
-                        const r1 = m1
-                          ? getMatchValue(m1 as unknown as Record<string, unknown>, currentTab)
-                          : null;
-                        const r2 = m2
-                          ? getMatchValue(m2 as unknown as Record<string, unknown>, currentTab)
-                          : null;
-                        return (
-                          <div
-                            key={i}
-                            className="grid grid-cols-2 gap-3 py-1.5 border-b border-border/30 items-center"
-                          >
-                            {/* Team 1 match */}
-                            <div className="flex items-center gap-1.5 justify-center">
-                              {r1 ? (
-                                <>
-                                  {currentTab.type === 'rate' ? (
-                                    <MatchIcon success={r1.success} />
-                                  ) : (
-                                    <span className={cn(
-                                      'text-xs font-bold',
-                                      m1!.is_winner ? 'text-green-400' : 'text-red-400'
-                                    )}>
-                                      {r1.display}
-                                    </span>
-                                  )}
-                                  <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
-                                    vs {m1!.opponent}
-                                  </span>
-                                  <span className={cn(
-                                    'text-[9px] font-bold px-1 rounded',
-                                    m1!.side === 'Blue'
-                                      ? 'bg-blue-500/20 text-blue-400'
-                                      : 'bg-red-500/20 text-red-400'
-                                  )}>
-                                    {m1!.side === 'Blue' ? 'BLUE' : 'RED'}
-                                  </span>
-                                </>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">
-                                  --
-                                </span>
-                              )}
+                      const maxLength = Math.max(t1m.length, t2m.length);
+                      const totalPages = Math.ceil(maxLength / MATCHES_PER_PAGE);
+                      const startIdx = (matchPage - 1) * MATCHES_PER_PAGE;
+                      const endIdx = startIdx + MATCHES_PER_PAGE;
+
+                      return (
+                        <>
+                          {Array.from(
+                            { length: Math.min(MATCHES_PER_PAGE, maxLength - startIdx) },
+                            (_, idx) => {
+                              const i = startIdx + idx;
+                              const m1 = t1m[i];
+                              const m2 = t2m[i];
+                              const r1 = m1
+                                ? getMatchValue(m1 as unknown as Record<string, unknown>, currentTab)
+                                : null;
+                              const r2 = m2
+                                ? getMatchValue(m2 as unknown as Record<string, unknown>, currentTab)
+                                : null;
+                              return (
+                                <div
+                                  key={i}
+                                  className="grid grid-cols-[1fr_auto_1fr] gap-2 py-1.5 border-b border-border/30 items-center"
+                                >
+                                  {/* Team 1 match */}
+                                  <div className="flex items-center gap-1 min-w-0">
+                                    {r1 ? (
+                                      <>
+                                        {/* Side badge - left */}
+                                        <span className={cn(
+                                          'text-[8px] font-bold px-1.5 py-0.5 rounded shrink-0',
+                                          m1!.side === 'Blue'
+                                            ? 'bg-blue-500/20 text-blue-400'
+                                            : 'bg-red-500/20 text-red-400'
+                                        )}>
+                                          {m1!.side === 'Blue' ? 'BLUE' : 'RED'}
+                                        </span>
+                                        {/* Opponent name - truncate */}
+                                        <span className="text-[10px] text-muted-foreground truncate min-w-0 flex-1">
+                                          vs {m1!.opponent}
+                                        </span>
+                                        {/* Stats - right */}
+                                        {currentTab.type === 'rate' ? (
+                                          <MatchIcon success={r1.success} />
+                                        ) : (
+                                          <span className={cn(
+                                            'text-[10px] font-bold shrink-0 whitespace-nowrap',
+                                            m1!.is_winner ? 'text-green-400' : 'text-red-400'
+                                          )}>
+                                            {r1.display}
+                                            {r1.oppDisplay !== undefined && (
+                                              <span className="text-muted-foreground font-normal">x{r1.oppDisplay}</span>
+                                            )}
+                                          </span>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">
+                                        --
+                                      </span>
+                                    )}
+                                  </div>
+                                  {/* Separator */}
+                                  <div className="w-px h-4 bg-border/60" />
+                                  {/* Team 2 match */}
+                                  <div className="flex items-center gap-1 min-w-0">
+                                    {r2 ? (
+                                      <>
+                                        {/* Side badge - left */}
+                                        <span className={cn(
+                                          'text-[8px] font-bold px-1.5 py-0.5 rounded shrink-0',
+                                          m2!.side === 'Blue'
+                                            ? 'bg-blue-500/20 text-blue-400'
+                                            : 'bg-red-500/20 text-red-400'
+                                        )}>
+                                          {m2!.side === 'Blue' ? 'BLUE' : 'RED'}
+                                        </span>
+                                        {/* Opponent name - truncate */}
+                                        <span className="text-[10px] text-muted-foreground truncate min-w-0 flex-1">
+                                          vs {m2!.opponent}
+                                        </span>
+                                        {/* Stats - right */}
+                                        {currentTab.type === 'rate' ? (
+                                          <MatchIcon success={r2.success} />
+                                        ) : (
+                                          <span className={cn(
+                                            'text-[10px] font-bold shrink-0 whitespace-nowrap',
+                                            m2!.is_winner ? 'text-green-400' : 'text-red-400'
+                                          )}>
+                                            {r2.display}
+                                            {r2.oppDisplay !== undefined && (
+                                              <span className="text-muted-foreground font-normal">x{r2.oppDisplay}</span>
+                                            )}
+                                          </span>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">
+                                        --
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            }
+                          )}
+
+                          {/* Pagination Controls */}
+                          {totalPages > 1 && (
+                            <div className="flex items-center justify-between pt-3 mt-2 border-t border-border/50">
+                              <button
+                                onClick={() => setMatchPage(p => Math.max(1, p - 1))}
+                                disabled={matchPage === 1}
+                                className={cn(
+                                  'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors',
+                                  matchPage === 1
+                                    ? 'text-muted-foreground/50 cursor-not-allowed'
+                                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                                )}
+                              >
+                                <ChevronLeft size={14} />
+                                Anterior
+                              </button>
+                              <span className="text-xs text-muted-foreground">
+                                {matchPage} / {totalPages}
+                              </span>
+                              <button
+                                onClick={() => setMatchPage(p => Math.min(totalPages, p + 1))}
+                                disabled={matchPage === totalPages}
+                                className={cn(
+                                  'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors',
+                                  matchPage === totalPages
+                                    ? 'text-muted-foreground/50 cursor-not-allowed'
+                                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                                )}
+                              >
+                                Próximo
+                                <ChevronRight size={14} />
+                              </button>
                             </div>
-                            {/* Team 2 match */}
-                            <div className="flex items-center gap-1.5 justify-center">
-                              {r2 ? (
-                                <>
-                                  {currentTab.type === 'rate' ? (
-                                    <MatchIcon success={r2.success} />
-                                  ) : (
-                                    <span className={cn(
-                                      'text-xs font-bold',
-                                      m2!.is_winner ? 'text-green-400' : 'text-red-400'
-                                    )}>
-                                      {r2.display}
-                                    </span>
-                                  )}
-                                  <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
-                                    vs {m2!.opponent}
-                                  </span>
-                                  <span className={cn(
-                                    'text-[9px] font-bold px-1 rounded',
-                                    m2!.side === 'Blue'
-                                      ? 'bg-blue-500/20 text-blue-400'
-                                      : 'bg-red-500/20 text-red-400'
-                                  )}>
-                                    {m2!.side === 'Blue' ? 'BLUE' : 'RED'}
-                                  </span>
-                                </>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">
-                                  --
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      }
+                          )}
+                        </>
                       );
                     })()}
                   </div>

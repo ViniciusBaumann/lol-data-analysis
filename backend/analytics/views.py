@@ -631,6 +631,8 @@ class CompareView(APIView):
         """Build per-match detail dict from a TeamMatchStats instance."""
         opp_kills = opp_stat.kills if opp_stat else 0
         opp_towers = opp_stat.towers if opp_stat else 0
+        opp_dragons = opp_stat.dragons if opp_stat else 0
+        opp_barons = opp_stat.barons if opp_stat else 0
         most_kills = stat.kills > opp_kills
         return {
             "match_id": match.id,
@@ -653,12 +655,16 @@ class CompareView(APIView):
             "game_length": match.game_length,
             "kill_diff": stat.kills - opp_kills,
             "tower_diff": stat.towers - opp_towers,
+            "opp_kills": opp_kills,
+            "opp_towers": opp_towers,
+            "opp_dragons": opp_dragons,
+            "opp_barons": opp_barons,
         }
 
     def _build_recent(self, team, year):
         """Build recent form data for a team.
 
-        Returns last5/last10 aggregate rates and per-match details.
+        Returns last5/last10 aggregate rates and all match details for pagination.
         """
         recent_qs = (
             TeamMatchStats.objects.filter(team=team, match__year=year)
@@ -668,8 +674,10 @@ class CompareView(APIView):
             .order_by("-match__date")
         )
 
-        last10_list = list(recent_qs[:10])
-        last5_list = last10_list[:5]
+        # Get all matches for the year (for pagination in frontend)
+        all_matches_list = list(recent_qs)
+        last10_list = all_matches_list[:10]
+        last5_list = all_matches_list[:5]
 
         # Compute aggregate rates
         last5_ids = [s.id for s in last5_list]
@@ -682,17 +690,17 @@ class CompareView(APIView):
             TeamMatchStats.objects.filter(id__in=last10_ids), team
         )
 
-        # Pre-fetch opponent stats for all recent matches
-        last10_match_ids = [s.match_id for s in last10_list]
+        # Pre-fetch opponent stats for all matches
+        all_match_ids = [s.match_id for s in all_matches_list]
         opp_stats_qs = (
-            TeamMatchStats.objects.filter(match_id__in=last10_match_ids)
+            TeamMatchStats.objects.filter(match_id__in=all_match_ids)
             .exclude(team=team)
         )
         opp_stats_map = {s.match_id: s for s in opp_stats_qs}
 
-        # Per-match details
+        # Per-match details (all matches)
         matches = []
-        for stat in last10_list:
+        for stat in all_matches_list:
             match = stat.match
             opponent = (
                 match.red_team
@@ -887,6 +895,21 @@ class CompareView(APIView):
             "matches": faceoff_matches,
         }
 
+        # ---- ELO RATINGS ----
+        def get_team_elo(team):
+            """Get aggregated Elo rating for a team across all leagues."""
+            elo_qs = TeamEloRating.objects.filter(team=team)
+            if not elo_qs.exists():
+                return None
+            # Get the highest Elo rating (primary league)
+            best_elo = elo_qs.order_by("-elo_rating").first()
+            return {
+                "global": round(best_elo.elo_rating, 0),
+                "blue": round(best_elo.elo_rating_blue, 0),
+                "red": round(best_elo.elo_rating_red, 0),
+                "last_change": round(best_elo.last_change, 1),
+            }
+
         data = {
             "team1_info": TeamMinSerializer(team1).data,
             "team2_info": TeamMinSerializer(team2).data,
@@ -895,6 +918,10 @@ class CompareView(APIView):
             "overall": overall,
             "recent": recent,
             "faceoffs": faceoffs,
+            "elo": {
+                "team1": get_team_elo(team1),
+                "team2": get_team_elo(team2),
+            },
         }
 
         return Response(data)
