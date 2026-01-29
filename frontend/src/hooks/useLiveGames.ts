@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { LiveGame } from '@/types';
-import { getLiveGames } from '@/services/live';
+import { LiveGame, ScheduleMatch } from '@/types';
+import { getLiveGames, getSchedule } from '@/services/live';
 
 const POLL_INTERVAL = 60_000; // 1 minute for list view
 
 export function useLiveGames() {
   const [games, setGames] = useState<LiveGame[]>([]);
+  const [upcoming, setUpcoming] = useState<ScheduleMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -14,9 +15,13 @@ export function useLiveGames() {
   const fetchGames = useCallback(async (silent: boolean) => {
     if (!silent) setLoading(true);
     try {
-      // Minimal data for list view (faster - skips predictions/enrichment)
-      const data = await getLiveGames(true);
-      setGames(data.games);
+      // Fetch both live games and schedule in parallel
+      const [liveData, scheduleData] = await Promise.all([
+        getLiveGames(true),
+        getSchedule(),
+      ]);
+      setGames(liveData.games);
+      setUpcoming(scheduleData.upcoming || []);
       setLastUpdated(new Date());
       setError(null);
     } catch (err: unknown) {
@@ -44,5 +49,5 @@ export function useLiveGames() {
 
   const refresh = useCallback(() => fetchGames(false), [fetchGames]);
 
-  return { games, loading, error, lastUpdated, refresh };
+  return { games, upcoming, loading, error, lastUpdated, refresh };
 }
