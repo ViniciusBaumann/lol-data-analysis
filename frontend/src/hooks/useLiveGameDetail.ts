@@ -60,6 +60,17 @@ export function useLiveGameDetail(matchId: string | undefined): UseLiveGameDetai
     }
   }, [matchId, fetchLiveData]);
 
+  // Auto-refresh every 30 seconds when viewing a live game
+  useEffect(() => {
+    if (!matchId) return;
+
+    const intervalId = setInterval(() => {
+      fetchLiveData(false); // Don't show loading spinner on auto-refresh
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(intervalId);
+  }, [matchId, fetchLiveData]);
+
   // Find the current game
   const game = games.find(g => g.match_id === matchId);
 

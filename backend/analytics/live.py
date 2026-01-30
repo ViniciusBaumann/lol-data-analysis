@@ -30,6 +30,10 @@ _CACHE_TTL_SECONDS = 2  # Cache live events for 2 seconds (detail page polls eve
 # Key: game_id, Value: {"live_stats": {...}, "players": {...}, "last_updated": datetime}
 _live_game_state_cache: dict[str, dict] = {}
 
+# Cache for game start timestamps (first frame timestamp for accurate game time)
+# Key: game_id, Value: {"first_timestamp": str, "fetched_at": datetime}
+_game_start_cache: dict[str, dict] = {}
+
 
 def _get_http_session() -> http_requests.Session:
     """Get or create a reusable HTTP session with connection pooling."""
@@ -366,9 +370,61 @@ def fetch_live_events() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
+def _fetch_window_initial(game_id: str) -> dict | None:
+    """Fetch livestats window WITHOUT startingTime to get the first frame.
+
+    This is used to get the game start timestamp for accurate game time calculation.
+    """
+    try:
+        session = _get_http_session()
+        resp = session.get(
+            f"{LIVESTATS_BASE_URL}/window/{game_id}",
+            timeout=8,
+        )
+        if resp.status_code == 200 and resp.text.strip():
+            return resp.json()
+        return None
+    except Exception:
+        logger.debug("Failed to fetch initial window for game %s", game_id)
+        return None
+
+
+def _get_game_start_timestamp(game_id: str) -> str | None:
+    """Get the game start timestamp (first frame timestamp), caching it.
+
+    The first frame's rfc460Timestamp marks the actual game start time.
+    We cache this because it never changes once the game starts.
+    """
+    global _game_start_cache
+
+    # Check cache first
+    cached = _game_start_cache.get(game_id)
+    if cached and cached.get("first_timestamp"):
+        return cached["first_timestamp"]
+
+    # Fetch initial window to get first frame timestamp
+    initial_window = _fetch_window_initial(game_id)
+    if initial_window:
+        frames = initial_window.get("frames", [])
+        if frames:
+            first_ts = frames[0].get("rfc460Timestamp")
+            if first_ts:
+                _game_start_cache[game_id] = {
+                    "first_timestamp": first_ts,
+                    "fetched_at": datetime.now(timezone.utc),
+                }
+                logger.debug("Cached game start timestamp for %s: %s", game_id, first_ts)
+                return first_ts
+
+    return None
+
+
 def _fetch_window(game_id: str) -> dict | None:
-    """Fetch livestats window.  Tries with startingTime first, falls back
-    to bare request so we always get gameMetadata even for very new games."""
+    """Fetch livestats window with startingTime for latest data.
+
+    Uses startingTime to get the most recent frames (last ~60s of game data).
+    For game time calculation, we use _get_game_start_timestamp separately.
+    """
     try:
         session = _get_http_session()
         resp = session.get(
@@ -381,7 +437,7 @@ def _fetch_window(game_id: str) -> dict | None:
             # If we got gameMetadata, return it
             if data.get("gameMetadata"):
                 return data
-        # Fallback: no startingTime
+        # Fallback: no startingTime (for very new games)
         resp = session.get(
             f"{LIVESTATS_BASE_URL}/window/{game_id}",
             timeout=8,
@@ -432,27 +488,41 @@ def _has_real_data(blue_frame: dict, red_frame: dict) -> bool:
     return False
 
 
-def _calculate_game_time(frames: list[dict]) -> int | None:
+def _calculate_game_time(game_id: str, frames: list[dict]) -> int | None:
     """Calculate game time in seconds from frame timestamps.
 
-    Returns the difference between the latest frame and the first frame.
+    Uses the cached game start timestamp (first frame ever) and compares
+    it to the latest frame timestamp for accurate game time.
+
+    The API only returns recent frames when using startingTime parameter,
+    so we need the cached first frame timestamp for accurate calculation.
     """
-    if not frames or len(frames) < 2:
+    if not frames:
+        logger.debug("Game %s: No frames to calculate game time", game_id)
         return None
 
     try:
-        first_ts = frames[0].get("rfc460Timestamp")
+        # Get the cached game start timestamp
+        first_ts = _get_game_start_timestamp(game_id)
         last_ts = frames[-1].get("rfc460Timestamp")
 
-        if not first_ts or not last_ts:
+        if not first_ts:
+            logger.debug("Game %s: Could not get game start timestamp", game_id)
+            return None
+
+        if not last_ts:
+            logger.debug("Game %s: Latest frame has no timestamp", game_id)
             return None
 
         first_dt = datetime.fromisoformat(first_ts.replace("Z", "+00:00"))
         last_dt = datetime.fromisoformat(last_ts.replace("Z", "+00:00"))
 
         diff_seconds = int((last_dt - first_dt).total_seconds())
+        logger.debug("Game %s: Game time = %d seconds (first=%s, last=%s)",
+                     game_id, diff_seconds, first_ts, last_ts)
         return max(0, diff_seconds)
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to calculate game time for %s: %s", game_id, e)
         return None
 
 
@@ -544,7 +614,7 @@ def fetch_game_data(game_id: str) -> dict:
         red_frame = latest.get("redTeam", {})
 
         # Always populate live_stats (even with zeros) so frontend can show game state
-        game_time = _calculate_game_time(frames)
+        game_time = _calculate_game_time(game_id, frames)
         live_stats = {
             "blue_kills": blue_frame.get("totalKills", 0),
             "red_kills": red_frame.get("totalKills", 0),
@@ -595,14 +665,23 @@ def fetch_game_data(game_id: str) -> dict:
             detail_frames = details.get("frames", [])
             if detail_frames:
                 last_detail = detail_frames[-1]
+                items_found = 0
                 for dp in last_detail.get("participants", []):
                     pid = dp.get("participantId")
                     if pid in players_by_id:
-                        players_by_id[pid]["items"] = dp.get("items", [])
+                        items = dp.get("items", [])
+                        players_by_id[pid]["items"] = items
                         players_by_id[pid]["wardsPlaced"] = dp.get("wardsPlaced", 0)
                         players_by_id[pid]["wardsDestroyed"] = dp.get("wardsDestroyed", 0)
                         players_by_id[pid]["killParticipation"] = dp.get("killParticipation", 0.0)
                         players_by_id[pid]["championDamageShare"] = dp.get("championDamageShare", 0.0)
+                        if items:
+                            items_found += 1
+                logger.debug("Game %s: Found items for %d players", game_id, items_found)
+            else:
+                logger.debug("Game %s: Details response had no frames", game_id)
+        else:
+            logger.debug("Game %s: No details response (items will be empty)", game_id)
 
         role_order = {"top": 0, "jng": 1, "mid": 2, "bot": 3, "sup": 4}
         blue_players = sorted(
@@ -691,6 +770,14 @@ def fetch_game_data(game_id: str) -> dict:
     ]
     for k in stale_keys:
         del _live_game_state_cache[k]
+
+    # Also clean up game start timestamp cache
+    stale_start_keys = [
+        k for k, v in _game_start_cache.items()
+        if v.get("fetched_at", cutoff) < cutoff
+    ]
+    for k in stale_start_keys:
+        del _game_start_cache[k]
 
     return result
 

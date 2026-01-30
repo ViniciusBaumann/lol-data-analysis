@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Loader2, Skull, TowerControl, Flame, Clock, TrendingUp, Award, Target } from 'lucide-react';
+import { Loader2, Skull, TowerControl, Flame, Clock, TrendingUp, Award, Target, Crown, Shield } from 'lucide-react';
 import { ScheduleMatch, CompareData } from '@/types';
 import { cn } from '@/lib/utils';
 import { LiveDot } from './LiveDot';
@@ -241,6 +241,40 @@ function ScheduleMatchViewComponent({ match, compareData, compareLoading }: Sche
                   value1={compareData.faceoffs.team1.avg_kills}
                   value2={compareData.faceoffs.team2.avg_kills}
                 />
+                <StatComparison
+                  label="Torres/Jogo"
+                  icon={<TowerControl size={12} className="text-sky-400" />}
+                  value1={compareData.faceoffs.team1.avg_towers}
+                  value2={compareData.faceoffs.team2.avg_towers}
+                />
+                <StatComparison
+                  label="Dragoes/Jogo"
+                  icon={<Flame size={12} className="text-orange-400" />}
+                  value1={compareData.faceoffs.team1.avg_dragons}
+                  value2={compareData.faceoffs.team2.avg_dragons}
+                />
+                <StatComparison
+                  label="Baroes/Jogo"
+                  icon={<Crown size={12} className="text-purple-400" />}
+                  value1={compareData.faceoffs.team1.avg_barons}
+                  value2={compareData.faceoffs.team2.avg_barons}
+                />
+                <StatComparison
+                  label="Inibidores/Jogo"
+                  icon={<Shield size={12} className="text-amber-400" />}
+                  value1={compareData.faceoffs.team1.avg_inhibitors}
+                  value2={compareData.faceoffs.team2.avg_inhibitors}
+                />
+                {compareData.faceoffs.team1.avg_game_length && compareData.faceoffs.team2.avg_game_length && (
+                  <StatComparison
+                    label="Tempo Medio"
+                    icon={<Clock size={12} className="text-zinc-400" />}
+                    value1={compareData.faceoffs.team1.avg_game_length}
+                    value2={compareData.faceoffs.team2.avg_game_length}
+                    format="time"
+                    higherIsBetter={false}
+                  />
+                )}
               </>
             ) : (
               <div className="text-center py-6">

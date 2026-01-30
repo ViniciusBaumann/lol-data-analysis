@@ -1366,6 +1366,18 @@ export default function ComparePage() {
                         team2Name={data.team2_info.short_name || data.team2_info.name}
                         type={currentTab.type}
                       />
+                      {/* Combined match average for avg-type stats */}
+                      {currentTab.type === 'avg' && (
+                        <div className="mt-2 flex items-center justify-center gap-2 px-3 py-1.5 rounded bg-secondary/50">
+                          <span className="text-[10px] text-muted-foreground uppercase">Avg/Match:</span>
+                          <span className="text-sm font-bold text-primary">
+                            {(
+                              ((data.faceoffs.team1?.[currentTab.rateField] ?? 0) as number) +
+                              ((data.faceoffs.team2?.[currentTab.rateField] ?? 0) as number)
+                            ).toFixed(1)}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="border-t border-border" />
