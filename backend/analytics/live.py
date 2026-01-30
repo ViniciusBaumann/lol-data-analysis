@@ -941,10 +941,9 @@ def match_team_to_db(team_code: str, team_name: str) -> int | None:
                 logger.debug("Matched team '%s' via word overlap -> %s (id=%d)", team_name, t.name, t.id)
                 return t.id
 
-    # Log failure for debugging
-    logger.warning(
-        "Failed to match team to DB: code='%s', name='%s'. "
-        "Consider adding an alias in TEAM_NAME_ALIASES.",
+    # Log failure for debugging (debug level to avoid noise for minor leagues)
+    logger.debug(
+        "Failed to match team to DB: code='%s', name='%s'.",
         team_code, team_name
     )
     return None

@@ -214,11 +214,20 @@ TEAM_NAME_ALIASES: dict[str, str] = {
     "koi": "movistar koi",
     "los ratones": "los ratones",
 
-    # ===== Swiss / EBL / Other Regional =====
-    "lund esports organization": "lund esports organization",
-    "leo": "lund esports organization",
-    "lausanne esports": "lausanne esports",
-    "els": "lausanne esports",
+    # ===== NLC (Nordic League Championship) =====
+    "lund esports organization": "leo",
+    "leo": "leo",
+    "leo esports": "leo",
+
+    # ===== Swiss / Prime League / Nexus League =====
+    # Lausanne-Sport Esports (official name has hyphen, abbrev is eLS)
+    "lausanne esports": "lausanne-sport esports",
+    "lausanne-sport esports": "lausanne-sport esports",
+    "lausanne sport esports": "lausanne-sport esports",
+    "els": "lausanne-sport esports",
+
+    # ===== Hitpoint Masters (Czech/Slovak) =====
     "observant force": "observant force",
     "obfe": "observant force",
+    "obf": "observant force",
 }
