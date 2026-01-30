@@ -29,8 +29,12 @@ def compute_team_features(team_id: int, n: int = 10) -> dict | None:
         n: Number of recent matches to use for computing averages.
 
     Returns:
-        Dict of 39 feature values (14 team + 25 position), or None if
+        Dict of 52 feature values (27 team + 25 position), or None if
         insufficient data after roster-change truncation.
+
+    Note:
+        For draft predictions, only 14 specific team features are used to match
+        the trained model. See TEAM_FEATURE_KEYS in build_draft_features().
     """
     from .models import Match, PlayerMatchStats, TeamMatchStats
 
@@ -578,7 +582,14 @@ def build_draft_features(
     features.extend(player_champ_features)
 
     # 106 team-context features
+    # The model was trained with 14 team features per side, so we must use exactly these
     NUM_TEAM_FEATURES = 106
+    TEAM_FEATURE_KEYS = [
+        "win_rate", "avg_kills", "avg_deaths", "avg_towers", "avg_dragons",
+        "avg_barons", "avg_inhibitors", "first_blood_rate", "first_tower_rate",
+        "first_dragon_rate", "avg_golddiffat10", "avg_golddiffat15",
+        "avg_game_length", "win_rate_last3",
+    ]  # 14 features to match trained model
     team_ctx: list[float] | None = None
 
     if blue_team_id is not None and red_team_id is not None:
@@ -588,11 +599,9 @@ def build_draft_features(
         if f1 is not None and f2 is not None:
             h2h = compute_h2h_features(blue_team_id, red_team_id)
 
-            feature_keys = list(f1.keys())
-            # Filter out position features which are separate
-            feature_keys = [k for k in feature_keys if not k.startswith("pos_")]
-            t1_vals = [f1[k] for k in feature_keys]
-            t2_vals = [f2[k] for k in feature_keys]
+            # Use only the 14 features the model was trained with
+            t1_vals = [f1.get(k, 0.0) for k in TEAM_FEATURE_KEYS]
+            t2_vals = [f2.get(k, 0.0) for k in TEAM_FEATURE_KEYS]
 
             diff_keys = [
                 "win_rate", "avg_kills", "avg_towers", "avg_dragons",
@@ -699,6 +708,12 @@ def predict_draft(
     total_dragons = max(0, min(12, total_dragons))
     total_barons = max(0, min(6, total_barons))
 
+    # Prediction ranges (based on historical standard deviations)
+    kills_range = (max(0, round(total_kills - 6)), round(total_kills + 6))
+    towers_range = (max(0, round(total_towers - 2)), min(22, round(total_towers + 2)))
+    dragons_range = (max(0, round(total_dragons - 1)), min(12, round(total_dragons + 1)))
+    barons_range = (max(0, round(total_barons - 1)), min(6, round(total_barons + 1)))
+
     return {
         "predictions": {
             "blue_win_prob": blue_win_prob,
@@ -707,6 +722,10 @@ def predict_draft(
             "total_towers": total_towers,
             "total_dragons": total_dragons,
             "total_barons": total_barons,
+            "kills_range": kills_range,
+            "towers_range": towers_range,
+            "dragons_range": dragons_range,
+            "barons_range": barons_range,
         },
         "features_available": True,
         "models_loaded": True,
@@ -794,6 +813,13 @@ def predict_match(team1_id: int, team2_id: int, league_id: int | None = None) ->
     total_barons = max(0, min(6, total_barons))
     game_time = max(15, min(80, game_time))
 
+    # Prediction ranges (based on historical standard deviations)
+    kills_range = (max(0, round(total_kills - 6)), round(total_kills + 6))
+    towers_range = (max(0, round(total_towers - 2)), min(22, round(total_towers + 2)))
+    dragons_range = (max(0, round(total_dragons - 1)), min(12, round(total_dragons + 1)))
+    barons_range = (max(0, round(total_barons - 1)), min(6, round(total_barons + 1)))
+    game_time_range = (max(15, round(game_time - 5)), min(80, round(game_time + 5)))
+
     return {
         "team1_info": team1_info,
         "team2_info": team2_info,
@@ -805,6 +831,11 @@ def predict_match(team1_id: int, team2_id: int, league_id: int | None = None) ->
             "total_towers": total_towers,
             "total_barons": total_barons,
             "game_time": game_time,
+            "kills_range": kills_range,
+            "towers_range": towers_range,
+            "dragons_range": dragons_range,
+            "barons_range": barons_range,
+            "game_time_range": game_time_range,
         },
         "features_available": True,
         "models_loaded": True,

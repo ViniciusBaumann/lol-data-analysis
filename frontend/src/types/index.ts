@@ -387,6 +387,10 @@ export interface DraftPredictions {
   total_towers: number;
   total_dragons: number;
   total_barons: number;
+  kills_range?: [number, number];
+  towers_range?: [number, number];
+  dragons_range?: [number, number];
+  barons_range?: [number, number];
 }
 
 export interface DraftPredictionResponse {
@@ -598,6 +602,11 @@ export interface MatchPredictionEnriched {
   total_dragons?: number;
   total_barons?: number;
   game_time?: number;
+  kills_range?: [number, number];
+  towers_range?: [number, number];
+  dragons_range?: [number, number];
+  barons_range?: [number, number];
+  game_time_range?: [number, number];
   error?: string;
   features_available?: boolean;
   models_loaded?: boolean;

@@ -10,6 +10,8 @@ import requests as http_requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from .team_aliases import TEAM_NAME_ALIASES
+
 logger = logging.getLogger(__name__)
 
 # Max workers for concurrent HTTP requests
@@ -869,18 +871,6 @@ def fetch_completed_game_data(game_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-# Known aliases for teams with different names in LoL Esports API vs database
-TEAM_NAME_ALIASES: dict[str, str] = {
-    # API name (lowercase) -> DB name to search for
-    "shanghai edward gaming hycan": "edward gaming",
-    "shenzhen ninjas in pyjamas": "ninjas in pyjamas",
-    "edward gaming hycan": "edward gaming",
-    "nip": "ninjas in pyjamas",
-    "edg": "edward gaming",
-    # Add more aliases as needed
-}
-
-
 def match_team_to_db(team_code: str, team_name: str) -> int | None:
     """Match a team from LoL Esports API to local database.
 
@@ -901,25 +891,30 @@ def match_team_to_db(team_code: str, team_name: str) -> int | None:
     if alias_name:
         team = Team.objects.filter(name__iexact=alias_name).first()
         if team:
+            logger.debug("Matched team '%s' via alias -> %s (id=%d)", team_name, team.name, team.id)
             return team.id
         team = Team.objects.filter(name__icontains=alias_name).first()
         if team:
+            logger.debug("Matched team '%s' via alias (partial) -> %s (id=%d)", team_name, team.name, team.id)
             return team.id
 
     # 1. Exact short_name match
     team = Team.objects.filter(short_name__iexact=team_code).first()
     if team:
+        logger.debug("Matched team '%s' via short_name -> %s (id=%d)", team_code, team.name, team.id)
         return team.id
 
     # 2. Check if API name contains any DB team name
     for t in Team.objects.all():
         db_name_lower = t.name.lower()
         if db_name_lower in team_name_lower:
+            logger.debug("Matched team '%s' via name containment -> %s (id=%d)", team_name, t.name, t.id)
             return t.id
 
     # 3. Check if any DB team name contains the API name
     team = Team.objects.filter(name__icontains=team_name).first()
     if team:
+        logger.debug("Matched team '%s' via icontains -> %s (id=%d)", team_name, team.name, team.id)
         return team.id
 
     # 4. Word-based matching: find teams where all significant words match
@@ -927,6 +922,7 @@ def match_team_to_db(team_code: str, team_name: str) -> int | None:
     skip_words = {
         'gaming', 'esports', 'team', 'club', 'org', 'the',
         'shanghai', 'beijing', 'shenzhen', 'hangzhou', 'guangzhou',
+        'suzhou', 'foshan', 'xian', 'jingdong', 'hangzhou',
         'seoul', 'tokyo', 'los', 'angeles', 'new', 'york',
     }
 
@@ -937,12 +933,20 @@ def match_team_to_db(team_code: str, team_name: str) -> int | None:
             db_words = set(t.name.lower().split()) - skip_words
             # If DB team words are subset of API words, it's likely a match
             if db_words and db_words.issubset(api_words):
+                logger.debug("Matched team '%s' via word subset -> %s (id=%d)", team_name, t.name, t.id)
                 return t.id
             # Or if there's significant overlap (at least 2 words or 50% match)
             common = api_words & db_words
             if len(common) >= 2 or (len(common) >= 1 and len(common) / max(len(db_words), 1) >= 0.5):
+                logger.debug("Matched team '%s' via word overlap -> %s (id=%d)", team_name, t.name, t.id)
                 return t.id
 
+    # Log failure for debugging
+    logger.warning(
+        "Failed to match team to DB: code='%s', name='%s'. "
+        "Consider adding an alias in TEAM_NAME_ALIASES.",
+        team_code, team_name
+    )
     return None
 
 
@@ -1369,18 +1373,26 @@ def get_recent_matches(team_id: int, limit: int = 5) -> list[dict]:
 
 
 def compute_team_context(
-    blue_db_id: int, red_db_id: int,
+    blue_db_id: int | None, red_db_id: int | None,
 ) -> dict:
-    """ELO ratings, H2H record, and recent form for both teams."""
+    """ELO ratings, H2H record, and recent form for both teams.
+
+    Can handle partial data when one team is not matched to DB.
+    """
     from .prediction import compute_h2h_features, compute_team_features, get_team_elo
 
-    blue_elo = get_team_elo(blue_db_id)
-    red_elo = get_team_elo(red_db_id)
-    blue_features = compute_team_features(blue_db_id)
-    red_features = compute_team_features(red_db_id)
-    h2h = compute_h2h_features(blue_db_id, red_db_id)
-    blue_recent = get_recent_matches(blue_db_id)
-    red_recent = get_recent_matches(red_db_id)
+    # Default ELO for unmatched teams
+    default_elo = {"global": 1500.0, "blue": 1500.0, "red": 1500.0}
+
+    blue_elo = get_team_elo(blue_db_id) if blue_db_id else default_elo
+    red_elo = get_team_elo(red_db_id) if red_db_id else default_elo
+    blue_features = compute_team_features(blue_db_id) if blue_db_id else None
+    red_features = compute_team_features(red_db_id) if red_db_id else None
+    h2h = compute_h2h_features(blue_db_id, red_db_id) if (blue_db_id and red_db_id) else {
+        "total_games_vs": 0, "win_rate_vs": 0.5, "recent_form_vs": 0.5
+    }
+    blue_recent = get_recent_matches(blue_db_id) if blue_db_id else []
+    red_recent = get_recent_matches(red_db_id) if red_db_id else []
 
     def _team_summary(features: dict | None, elo: dict, recent: list[dict]) -> dict:
         summary: dict = {
@@ -1678,14 +1690,16 @@ def get_live_games_data(minimal: bool = False) -> list[dict]:
                         "match_prediction": None,
                     }
 
-                    if blue_db_id is not None and red_db_id is not None:
-                        try:
-                            enrichment["team_context"] = compute_team_context(
-                                blue_db_id, red_db_id,
-                            )
-                        except Exception:
-                            logger.exception("compute_team_context failed")
+                    # Always try to compute team_context (even with partial data)
+                    try:
+                        enrichment["team_context"] = compute_team_context(
+                            blue_db_id, red_db_id,
+                        )
+                    except Exception:
+                        logger.exception("compute_team_context failed")
 
+                    # Match prediction requires both teams
+                    if blue_db_id is not None and red_db_id is not None:
                         try:
                             enrichment["match_prediction"] = compute_match_prediction(
                                 blue_db_id, red_db_id,
