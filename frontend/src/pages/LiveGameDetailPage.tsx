@@ -42,6 +42,7 @@ interface PageHeaderProps {
   scheduleMatch: ReturnType<typeof useLiveGameDetail>['scheduleMatch'];
   lastUpdated: Date | null;
   loading: boolean;
+  isRefreshing: boolean;
   refresh: () => void;
 }
 
@@ -50,6 +51,7 @@ const PageHeader = memo(function PageHeader({
   scheduleMatch,
   lastUpdated,
   loading,
+  isRefreshing,
   refresh,
 }: PageHeaderProps) {
   return (
@@ -94,10 +96,10 @@ const PageHeader = memo(function PageHeader({
       {game && (
         <button
           onClick={refresh}
-          disabled={loading}
+          disabled={isRefreshing}
           className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 transition-colors text-zinc-400 disabled:opacity-50"
         >
-          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
           Atualizar
         </button>
       )}
@@ -254,6 +256,7 @@ export default function LiveGameDetailPage() {
     loading,
     scheduleLoading,
     compareLoading,
+    isRefreshing,
     error,
     lastUpdated,
     refresh,
@@ -270,6 +273,7 @@ export default function LiveGameDetailPage() {
         scheduleMatch={scheduleMatch}
         lastUpdated={lastUpdated}
         loading={loading}
+        isRefreshing={isRefreshing}
         refresh={refresh}
       />
 

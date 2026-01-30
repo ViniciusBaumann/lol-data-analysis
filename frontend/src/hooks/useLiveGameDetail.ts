@@ -10,6 +10,7 @@ interface UseLiveGameDetailResult {
   loading: boolean;
   scheduleLoading: boolean;
   compareLoading: boolean;
+  isRefreshing: boolean;
   error: string | null;
   lastUpdated: Date | null;
   refresh: () => void;
@@ -18,6 +19,7 @@ interface UseLiveGameDetailResult {
 export function useLiveGameDetail(matchId: string | undefined): UseLiveGameDetailResult {
   const [games, setGames] = useState<LiveGame[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
@@ -32,11 +34,12 @@ export function useLiveGameDetail(matchId: string | undefined): UseLiveGameDetai
   const initialFetchDone = useRef(false);
 
   // Fetch live games data (full data, no polling)
-  const fetchLiveData = useCallback(async (showLoading = true) => {
+  const fetchLiveData = useCallback(async (showLoading = true, isManualRefresh = false) => {
     if (fetchInProgress.current) return;
     fetchInProgress.current = true;
 
     if (showLoading) setLoading(true);
+    if (isManualRefresh) setIsRefreshing(true);
     setError(null);
 
     try {
@@ -48,6 +51,7 @@ export function useLiveGameDetail(matchId: string | undefined): UseLiveGameDetai
       setError(message);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
       fetchInProgress.current = false;
     }
   }, []);
@@ -104,7 +108,7 @@ export function useLiveGameDetail(matchId: string | undefined): UseLiveGameDetai
 
   // Manual refresh function
   const refresh = useCallback(() => {
-    fetchLiveData(false);
+    fetchLiveData(false, true);
   }, [fetchLiveData]);
 
   return {
@@ -114,6 +118,7 @@ export function useLiveGameDetail(matchId: string | undefined): UseLiveGameDetai
     loading,
     scheduleLoading,
     compareLoading,
+    isRefreshing,
     error,
     lastUpdated,
     refresh,

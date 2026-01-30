@@ -994,12 +994,34 @@ def _build_series_games(
         red_info = None
         for gt in game_teams:
             tid = str(gt.get("id", ""))
-            side = gt.get("side", "")
+            side = (gt.get("side") or "").lower()
             info = team_id_map.get(tid, {"code": "?", "name": "?", "image": ""})
             if side == "blue":
                 blue_info = info
             elif side == "red":
                 red_info = info
+
+        # Fallback: if we have team data from completed game, use that for side assignment
+        if (blue_info is None or red_info is None) and state == "completed" and game_id:
+            data = completed_data_map.get(game_id, {})
+            data_team_ids = data.get("team_ids", {})
+            if data_team_ids:
+                blue_id = data_team_ids.get("blue")
+                red_id = data_team_ids.get("red")
+                if blue_id and blue_info is None:
+                    blue_info = team_id_map.get(blue_id, {"code": "?", "name": "?", "image": ""})
+                if red_id and red_info is None:
+                    red_info = team_id_map.get(red_id, {"code": "?", "name": "?", "image": ""})
+
+        # Final fallback: use array order
+        if blue_info is None or red_info is None:
+            for i, gt in enumerate(game_teams):
+                tid = str(gt.get("id", ""))
+                info = team_id_map.get(tid, {"code": "?", "name": "?", "image": ""})
+                if i == 0 and blue_info is None:
+                    blue_info = info
+                elif i == 1 and red_info is None:
+                    red_info = info
 
         entry: dict = {
             "number": g.get("number", 0),
@@ -1512,27 +1534,39 @@ def get_live_games_data(minimal: bool = False) -> list[dict]:
         blue_esports_id = team_ids.get("blue")
         red_esports_id = team_ids.get("red")
 
-        logger.debug(
-            "Team mapping for game %s: livestats blue_id=%s, red_id=%s, teams_raw ids=%s",
-            game_id, blue_esports_id, red_esports_id,
-            [str(t.get("id", "")) for t in teams_raw],
+        # Log details for debugging team matching
+        teams_raw_info = [(str(t.get("id", "")), t.get("code", "")) for t in teams_raw]
+        logger.info(
+            "Team mapping for game %s: livestats blue_id=%r, red_id=%r, teams_raw=%s",
+            game_id, blue_esports_id, red_esports_id, teams_raw_info,
         )
 
+        # Step 1: Try matching by esportsTeamId from livestats
         if blue_esports_id or red_esports_id:
             for t in teams_raw:
                 tid = str(t.get("id", ""))
                 if blue_esports_id and tid == blue_esports_id:
                     blue_raw = t
-                elif red_esports_id and tid == red_esports_id:
+                    logger.debug("Matched blue team by ID: %s -> %s", blue_esports_id, t.get("code"))
+                if red_esports_id and tid == red_esports_id:
                     red_raw = t
+                    logger.debug("Matched red team by ID: %s -> %s", red_esports_id, t.get("code"))
 
-        # Fallback: try to use game's teams[].side from all_games
+        # Step 2: Fallback - use game's teams[].side from all_games (most reliable for current game)
         if (blue_raw is None or red_raw is None) and game_id:
             for g in ev.get("all_games", []):
-                if g.get("id") == game_id:
-                    for gt in g.get("teams", []):
+                # Match by game ID (handle both string and int comparison)
+                gid = g.get("id")
+                if str(gid) == str(game_id):
+                    game_teams = g.get("teams", [])
+                    logger.debug(
+                        "Found game %s in all_games with teams: %s",
+                        game_id,
+                        [(gt.get("id"), gt.get("side")) for gt in game_teams],
+                    )
+                    for gt in game_teams:
                         tid = str(gt.get("id", ""))
-                        side = gt.get("side", "")
+                        side = (gt.get("side") or "").lower()
                         for t in teams_raw:
                             if str(t.get("id", "")) == tid:
                                 if side == "blue" and blue_raw is None:
@@ -1542,11 +1576,51 @@ def get_live_games_data(minimal: bool = False) -> list[dict]:
                                 break
                     break
 
-        # Final fallback to array order if sides still couldn't be determined
-        if blue_raw is None:
-            blue_raw = teams_raw[0] if len(teams_raw) > 0 else {}
-        if red_raw is None:
-            red_raw = teams_raw[1] if len(teams_raw) > 1 else {}
+        # Step 2.5: Fallback - if we have partial match but using all_games didn't complete it,
+        # try to find the other team by exclusion
+        if blue_raw and not red_raw and len(teams_raw) == 2:
+            red_raw = teams_raw[1] if teams_raw[0].get("id") == blue_raw.get("id") else teams_raw[0]
+            logger.debug("Assigned red_raw by exclusion: %s", red_raw.get("code"))
+        elif red_raw and not blue_raw and len(teams_raw) == 2:
+            blue_raw = teams_raw[1] if teams_raw[0].get("id") == red_raw.get("id") else teams_raw[0]
+            logger.debug("Assigned blue_raw by exclusion: %s", blue_raw.get("code"))
+
+        # Step 3: Verify we have two different teams assigned
+        if blue_raw and red_raw and blue_raw.get("id") == red_raw.get("id"):
+            logger.warning(
+                "Same team assigned to both sides for game %s, resetting",
+                game_id,
+            )
+            blue_raw = None
+            red_raw = None
+
+        # Step 4: If we still couldn't determine sides, use fallback
+        if blue_raw is None or red_raw is None:
+            logger.warning(
+                "Could not determine team sides for game %s. blue_raw=%s, red_raw=%s, teams_raw=%s",
+                game_id,
+                blue_raw.get("code") if blue_raw else None,
+                red_raw.get("code") if red_raw else None,
+                [t.get("code") for t in teams_raw],
+            )
+            # Final fallback to array order
+            if blue_raw is None:
+                blue_raw = teams_raw[0] if len(teams_raw) > 0 else {}
+            if red_raw is None:
+                # Make sure we don't assign the same team to both sides
+                if len(teams_raw) > 1 and teams_raw[1].get("id") != blue_raw.get("id"):
+                    red_raw = teams_raw[1]
+                elif len(teams_raw) > 0 and teams_raw[0].get("id") != blue_raw.get("id"):
+                    red_raw = teams_raw[0]
+                else:
+                    red_raw = {}
+        else:
+            logger.debug(
+                "Team sides determined for game %s: blue=%s, red=%s",
+                game_id,
+                blue_raw.get("code"),
+                red_raw.get("code"),
+            )
 
         # In minimal mode, skip DB lookups and expensive computations
         blue_db_id = None
