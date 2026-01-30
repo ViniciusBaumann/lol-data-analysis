@@ -4,9 +4,11 @@ import { cn } from '@/lib/utils';
 
 interface TeamContextPanelProps {
   context: TeamContext;
+  blueTeamCode?: string;
+  redTeamCode?: string;
 }
 
-function TeamContextPanelComponent({ context }: TeamContextPanelProps) {
+function TeamContextPanelComponent({ context, blueTeamCode, redTeamCode }: TeamContextPanelProps) {
   const { blue_team, red_team, h2h } = context;
   const hasStats = blue_team.stats && red_team.stats;
 
@@ -89,6 +91,87 @@ function TeamContextPanelComponent({ context }: TeamContextPanelProps) {
           </p>
         )}
       </div>
+
+      {/* Recent Matches - Match by Match */}
+      {(blue_team.recent_matches?.length > 0 || red_team.recent_matches?.length > 0) && (
+        <div className="space-y-2">
+          <p className="text-[9px] font-semibold text-zinc-600 uppercase">Ultimas Partidas</p>
+          <div className="space-y-0">
+            {/* Header */}
+            <div className="grid grid-cols-[1fr_auto_1fr] gap-2 pb-1 border-b border-zinc-800/50">
+              <span className="text-[9px] font-medium text-blue-400 text-center">{blueTeamCode || 'Blue'}</span>
+              <div className="w-px bg-zinc-800" />
+              <span className="text-[9px] font-medium text-red-400 text-center">{redTeamCode || 'Red'}</span>
+            </div>
+            {/* Rows */}
+            {Array.from({ length: 5 }, (_, idx) => {
+              const m1 = blue_team.recent_matches?.[idx];
+              const m2 = red_team.recent_matches?.[idx];
+              return (
+                <div
+                  key={idx}
+                  className="grid grid-cols-[1fr_auto_1fr] gap-2 py-1 border-b border-zinc-800/30 items-center"
+                >
+                  {/* Blue Team match */}
+                  <div className="flex items-center gap-1 min-w-0">
+                    {m1 ? (
+                      <>
+                        <span className={cn(
+                          'text-[6px] font-bold px-1 py-0.5 rounded shrink-0',
+                          m1.side === 'Blue'
+                            ? 'bg-blue-500/20 text-blue-400'
+                            : 'bg-red-500/20 text-red-400'
+                        )}>
+                          {m1.side === 'Blue' ? 'BLUE' : 'RED'}
+                        </span>
+                        <span className="text-[9px] text-zinc-500 truncate min-w-0 flex-1">
+                          vs {m1.opponent_code}
+                        </span>
+                        <span className={cn(
+                          'text-[8px] font-bold shrink-0',
+                          m1.won ? 'text-emerald-400' : 'text-red-400'
+                        )}>
+                          {m1.won ? 'W' : 'L'}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-[9px] text-zinc-700">--</span>
+                    )}
+                  </div>
+                  {/* Separator */}
+                  <div className="w-px h-3 bg-zinc-800/60" />
+                  {/* Red Team match */}
+                  <div className="flex items-center gap-1 min-w-0">
+                    {m2 ? (
+                      <>
+                        <span className={cn(
+                          'text-[6px] font-bold px-1 py-0.5 rounded shrink-0',
+                          m2.side === 'Blue'
+                            ? 'bg-blue-500/20 text-blue-400'
+                            : 'bg-red-500/20 text-red-400'
+                        )}>
+                          {m2.side === 'Blue' ? 'BLUE' : 'RED'}
+                        </span>
+                        <span className="text-[9px] text-zinc-500 truncate min-w-0 flex-1">
+                          vs {m2.opponent_code}
+                        </span>
+                        <span className={cn(
+                          'text-[8px] font-bold shrink-0',
+                          m2.won ? 'text-emerald-400' : 'text-red-400'
+                        )}>
+                          {m2.won ? 'W' : 'L'}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-[9px] text-zinc-700">--</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

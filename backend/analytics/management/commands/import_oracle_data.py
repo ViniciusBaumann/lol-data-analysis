@@ -461,10 +461,10 @@ class Command(BaseCommand):
 
             # Flush bulk batches periodically.
             if len(team_stats_batch) >= BATCH_SIZE:
-                TeamMatchStats.objects.bulk_create(team_stats_batch)
+                TeamMatchStats.objects.bulk_create(team_stats_batch, ignore_conflicts=True)
                 team_stats_batch.clear()
             if len(player_stats_batch) >= BATCH_SIZE:
-                PlayerMatchStats.objects.bulk_create(player_stats_batch)
+                PlayerMatchStats.objects.bulk_create(player_stats_batch, ignore_conflicts=True)
                 player_stats_batch.clear()
 
             # Progress indicator every 500 games.
@@ -476,9 +476,9 @@ class Command(BaseCommand):
 
         # Flush remaining batches.
         if team_stats_batch:
-            TeamMatchStats.objects.bulk_create(team_stats_batch)
+            TeamMatchStats.objects.bulk_create(team_stats_batch, ignore_conflicts=True)
         if player_stats_batch:
-            PlayerMatchStats.objects.bulk_create(player_stats_batch)
+            PlayerMatchStats.objects.bulk_create(player_stats_batch, ignore_conflicts=True)
 
         elapsed = time.monotonic() - t_start
 

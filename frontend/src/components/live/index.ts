@@ -18,6 +18,7 @@ export { TeamContextPanel } from './TeamContextPanel';
 export { SynergiesPanel } from './SynergiesPanel';
 export { PredictionComparisonPanel } from './PredictionComparisonPanel';
 export { ModelEstimatesPanel } from './ModelEstimatesPanel';
+export { MatchPredictionPanel } from './MatchPredictionPanel';
 
 // Schedule view
 export { ScheduleMatchView } from './ScheduleMatchView';

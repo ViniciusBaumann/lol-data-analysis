@@ -563,9 +563,18 @@ export interface TeamContextStats {
   red_win_rate: number;
 }
 
+export interface RecentMatch {
+  date: string | null;
+  opponent_code: string;
+  opponent_image: string | null;
+  side: 'Blue' | 'Red';
+  won: boolean;
+}
+
 export interface TeamContextEntry {
   elo: TeamEloInfo;
   stats: TeamContextStats | null;
+  recent_matches: RecentMatch[];
 }
 
 export interface H2HContext {

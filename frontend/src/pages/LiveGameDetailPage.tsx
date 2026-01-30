@@ -7,14 +7,12 @@ import {
   SeriesHeader,
   SeriesTimeline,
   LiveDot,
-  WinProbBar,
   AwaitingStartPanel,
   LaneMatchupsPanel,
   PlayerChampionHistoryPanel,
   TeamContextPanel,
   SynergiesPanel,
-  PredictionComparisonPanel,
-  ModelEstimatesPanel,
+  MatchPredictionPanel,
   ScheduleMatchView,
 } from '@/components/live';
 
@@ -181,34 +179,22 @@ const GameContent = memo(function GameContent({ game }: GameContentProps) {
                 <GameScoreboard game={game} ddragonVersion={game.ddragon_version} />
               )}
 
-              {/* Win Probability (below scoreboard) */}
-              {!isCurrentGameCompleted && preds && (
-                <WinProbBar blueProb={preds.blue_win_prob} redProb={preds.red_win_prob} />
-              )}
-
-              {/* Predictions message */}
-              {!isCurrentGameCompleted && !preds && game.draft && game.prediction?.message && (
-                <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
-                  <p className="text-xs text-zinc-500 text-center">{game.prediction.message}</p>
-                </div>
-              )}
-
-              {/* Predictions estimates */}
-              {!isCurrentGameCompleted && preds && (
-                <ModelEstimatesPanel predictions={preds} />
+              {/* Match Prediction Panel (draft + predictions) */}
+              {!isCurrentGameCompleted && game.draft && (
+                <MatchPredictionPanel
+                  draft={game.draft}
+                  predictions={preds}
+                  predictionMessage={game.prediction?.message}
+                  matchPrediction={game.enrichment?.match_prediction}
+                  blueTeam={game.blue_team}
+                  redTeam={game.red_team}
+                  ddragonVersion={game.ddragon_version}
+                />
               )}
 
               {/* Analytics Enrichment */}
               {hasEnrichment && (
                 <>
-                  {/* Prediction Comparison (draft model vs team model) */}
-                  {preds && game.enrichment!.match_prediction && (
-                    <PredictionComparisonPanel
-                      draftPred={preds}
-                      matchPred={game.enrichment!.match_prediction}
-                    />
-                  )}
-
                   {/* Lane Matchups + Synergies (left) | Team Context (right) */}
                   {showAnalyticsPanels && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -227,7 +213,11 @@ const GameContent = memo(function GameContent({ game }: GameContentProps) {
 
                       {/* Right column: Team Context */}
                       {hasTeamContext && (
-                        <TeamContextPanel context={game.enrichment!.team_context!} />
+                        <TeamContextPanel
+                          context={game.enrichment!.team_context!}
+                          blueTeamCode={game.blue_team.code}
+                          redTeamCode={game.red_team.code}
+                        />
                       )}
                     </div>
                   )}

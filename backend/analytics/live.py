@@ -1234,6 +1234,31 @@ def compute_player_champion_stats(
     return result
 
 
+def get_recent_matches(team_id: int, limit: int = 5) -> list[dict]:
+    """Get the last N matches for a team with side and result."""
+    from .models import TeamMatchStats
+
+    recent = (
+        TeamMatchStats.objects
+        .filter(team_id=team_id)
+        .select_related("match", "match__blue_team", "match__red_team")
+        .order_by("-match__date")[:limit]
+    )
+
+    matches = []
+    for tms in recent:
+        match = tms.match
+        opponent = match.red_team if match.blue_team_id == team_id else match.blue_team
+        matches.append({
+            "date": match.date.isoformat() if match.date else None,
+            "opponent_code": opponent.short_name or opponent.name[:3].upper() if opponent else "???",
+            "opponent_image": None,  # Could add team images later
+            "side": tms.side,  # "Blue" or "Red"
+            "won": tms.is_winner,
+        })
+    return matches
+
+
 def compute_team_context(
     blue_db_id: int, red_db_id: int,
 ) -> dict:
@@ -1245,8 +1270,10 @@ def compute_team_context(
     blue_features = compute_team_features(blue_db_id)
     red_features = compute_team_features(red_db_id)
     h2h = compute_h2h_features(blue_db_id, red_db_id)
+    blue_recent = get_recent_matches(blue_db_id)
+    red_recent = get_recent_matches(red_db_id)
 
-    def _team_summary(features: dict | None, elo: dict) -> dict:
+    def _team_summary(features: dict | None, elo: dict, recent: list[dict]) -> dict:
         summary: dict = {
             "elo": {
                 "global": round(elo["global"], 1),
@@ -1254,6 +1281,7 @@ def compute_team_context(
                 "red": round(elo["red"], 1),
             },
             "stats": None,
+            "recent_matches": recent,
         }
         if features:
             summary["stats"] = {
@@ -1276,8 +1304,8 @@ def compute_team_context(
         return summary
 
     return {
-        "blue_team": _team_summary(blue_features, blue_elo),
-        "red_team": _team_summary(red_features, red_elo),
+        "blue_team": _team_summary(blue_features, blue_elo, blue_recent),
+        "red_team": _team_summary(red_features, red_elo, red_recent),
         "h2h": {
             "total_games": h2h["total_games_vs"],
             "blue_win_rate": round(h2h["win_rate_vs"] * 100, 1),
