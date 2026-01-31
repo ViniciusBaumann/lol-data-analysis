@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { LiveGame, ScheduleMatch, CompareData } from '@/types';
-import { getSchedule, getLiveGames } from '@/services/live';
+import { getSchedule, getLiveGames, getLiveMatchDetail } from '@/services/live';
 import { getCompareData } from '@/services/compare';
 
 interface UseLiveGameDetailResult {
@@ -17,13 +17,13 @@ interface UseLiveGameDetailResult {
 }
 
 export function useLiveGameDetail(matchId: string | undefined): UseLiveGameDetailResult {
-  const [games, setGames] = useState<LiveGame[]>([]);
+  const [game, setGame] = useState<LiveGame | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  // State for scheduled match (fallback when game not live)
+  // State for scheduled match (fallback when game not found at all)
   const [scheduleMatch, setScheduleMatch] = useState<ScheduleMatch | null>(null);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [compareData, setCompareData] = useState<CompareData | null>(null);
@@ -33,9 +33,9 @@ export function useLiveGameDetail(matchId: string | undefined): UseLiveGameDetai
   const fetchInProgress = useRef(false);
   const initialFetchDone = useRef(false);
 
-  // Fetch live games data (full data, no polling)
-  const fetchLiveData = useCallback(async (showLoading = true, isManualRefresh = false) => {
-    if (fetchInProgress.current) return;
+  // Fetch match data directly by ID (more reliable than filtering live games)
+  const fetchMatchData = useCallback(async (showLoading = true, isManualRefresh = false) => {
+    if (!matchId || fetchInProgress.current) return;
     fetchInProgress.current = true;
 
     if (showLoading) setLoading(true);
@@ -43,42 +43,56 @@ export function useLiveGameDetail(matchId: string | undefined): UseLiveGameDetai
     setError(null);
 
     try {
-      const data = await getLiveGames(false); // Full data
-      setGames(data.games);
+      // Try to fetch the match directly by ID
+      const matchData = await getLiveMatchDetail(matchId);
+      setGame(matchData);
       setLastUpdated(new Date());
+      setScheduleMatch(null); // Clear schedule match if we got live data
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Falha ao carregar dados';
-      setError(message);
+      // If direct fetch fails, try getting from live games list
+      try {
+        const liveData = await getLiveGames(false);
+        const foundGame = liveData.games.find(g => g.match_id === matchId);
+        if (foundGame) {
+          setGame(foundGame);
+          setLastUpdated(new Date());
+          setScheduleMatch(null);
+        } else {
+          // Game not in live list, will trigger schedule fallback
+          setGame(undefined);
+        }
+      } catch {
+        const message = err instanceof Error ? err.message : 'Falha ao carregar dados';
+        setError(message);
+        setGame(undefined);
+      }
     } finally {
       setLoading(false);
       setIsRefreshing(false);
       fetchInProgress.current = false;
     }
-  }, []);
+  }, [matchId]);
 
   // Initial fetch on mount
   useEffect(() => {
     if (!initialFetchDone.current && matchId) {
       initialFetchDone.current = true;
-      fetchLiveData(true);
+      fetchMatchData(true);
     }
-  }, [matchId, fetchLiveData]);
+  }, [matchId, fetchMatchData]);
 
-  // Auto-refresh every 30 seconds when viewing a live game
+  // Auto-refresh every 10 seconds when viewing a game
   useEffect(() => {
     if (!matchId) return;
 
     const intervalId = setInterval(() => {
-      fetchLiveData(false); // Don't show loading spinner on auto-refresh
-    }, 10000); // 10 seconds
+      fetchMatchData(false); // Don't show loading spinner on auto-refresh
+    }, 10000);
 
     return () => clearInterval(intervalId);
-  }, [matchId, fetchLiveData]);
+  }, [matchId, fetchMatchData]);
 
-  // Find the current game
-  const game = games.find(g => g.match_id === matchId);
-
-  // Fetch schedule data if game not found in live games
+  // Fetch schedule data if game not found
   useEffect(() => {
     if (!loading && !game && matchId && !scheduleMatch) {
       setScheduleLoading(true);
@@ -108,8 +122,8 @@ export function useLiveGameDetail(matchId: string | undefined): UseLiveGameDetai
 
   // Manual refresh function
   const refresh = useCallback(() => {
-    fetchLiveData(false, true);
-  }, [fetchLiveData]);
+    fetchMatchData(false, true);
+  }, [fetchMatchData]);
 
   return {
     game,

@@ -22,5 +22,6 @@ urlpatterns = [
     path("draft-predict/", views.DraftPredictView.as_view(), name="draft-predict"),
     path("champion-matchups/", views.ChampionMatchupsView.as_view(), name="champion-matchups"),
     path("live/", views.LiveGamesView.as_view(), name="live-games"),
+    path("live/<str:match_id>/", views.LiveMatchDetailView.as_view(), name="live-match-detail"),
     path("schedule/", views.ScheduleView.as_view(), name="schedule"),
 ]

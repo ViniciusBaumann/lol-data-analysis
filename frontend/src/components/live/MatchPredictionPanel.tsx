@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { TrendingUp, Swords, Target, Mountain, Crown, Clock } from 'lucide-react';
+import { TrendingUp, Swords, Target, Mountain, Crown, Clock, ExternalLink } from 'lucide-react';
 import { LiveGameDraft, DraftPredictions, MatchPredictionEnriched } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -99,7 +99,20 @@ function MatchPredictionPanelComponent({
             <TrendingUp size={16} className="text-emerald-400" />
             <span className="text-sm font-semibold text-zinc-200">Predicao da Partida</span>
           </div>
-          <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Draft + Contexto</span>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Draft + Contexto</span>
+            <button
+              onClick={() => {
+                const url = `/compare?team1=${encodeURIComponent(blueTeam.name)}&team2=${encodeURIComponent(redTeam.name)}`;
+                window.open(url, '_blank');
+              }}
+              className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-zinc-400 hover:text-emerald-400 bg-zinc-800 hover:bg-zinc-700 rounded transition-colors"
+              title="Comparar times em nova aba"
+            >
+              <ExternalLink size={12} />
+              Comparar
+            </button>
+          </div>
         </div>
       </div>
 

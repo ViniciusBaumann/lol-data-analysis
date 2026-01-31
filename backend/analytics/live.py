@@ -1761,3 +1761,218 @@ def get_live_games_data(minimal: bool = False) -> list[dict]:
         _live_events_cache["timestamp"] = datetime.now(timezone.utc)
 
     return games
+
+
+# ---------------------------------------------------------------------------
+# Get single match data by match_id (for direct access regardless of state)
+# ---------------------------------------------------------------------------
+
+
+def get_live_match_data(match_id: str) -> dict | None:
+    """Fetch and process a specific match by ID, regardless of its state.
+
+    This function fetches match details directly using getEventDetails,
+    similar to how live-lol-esports works. It attempts to get live stats
+    even if the match isn't marked as 'inProgress' in the schedule.
+
+    Args:
+        match_id: The LoL Esports match ID.
+
+    Returns:
+        Match data dict or None if not found.
+    """
+    from .prediction import predict_draft
+
+    # Fetch event details directly
+    event = _fetch_event_details(match_id)
+    if not event:
+        logger.warning("Could not fetch event details for match %s", match_id)
+        return None
+
+    match_data = event.get("match", {})
+    if not match_data:
+        return None
+
+    teams_raw = match_data.get("teams", [])
+    all_games = match_data.get("games", [])
+    league_data = event.get("league", {})
+    streams = event.get("streams", [])
+
+    # Find the current game (inProgress > unstarted > last completed)
+    current_game = None
+    current_game_id = None
+
+    # Priority 1: Find inProgress game
+    for g in all_games:
+        if g.get("state") == "inProgress":
+            current_game = g
+            current_game_id = g.get("id")
+            break
+
+    # Priority 2: Find first unstarted game
+    if not current_game:
+        for g in all_games:
+            if g.get("state") == "unstarted":
+                current_game = g
+                current_game_id = g.get("id")
+                break
+
+    # Priority 3: Use last completed game
+    if not current_game:
+        completed_games = [g for g in all_games if g.get("state") == "completed"]
+        if completed_games:
+            current_game = completed_games[-1]
+            current_game_id = current_game.get("id")
+
+    if not current_game_id:
+        logger.warning("No game found for match %s", match_id)
+        return None
+
+    # Fetch game data (draft, live stats, players)
+    game_data = fetch_game_data(current_game_id)
+    draft = game_data.get("draft")
+    live_stats = game_data.get("live_stats")
+    players = game_data.get("players")
+    patch_version = game_data.get("patch_version", "")
+    ddragon_version = game_data.get("ddragon_version", _ddragon_version)
+    team_ids = game_data.get("team_ids", {"blue": None, "red": None})
+
+    # Determine team sides
+    blue_raw = None
+    red_raw = None
+    blue_esports_id = team_ids.get("blue")
+    red_esports_id = team_ids.get("red")
+
+    # Try matching by esportsTeamId from livestats
+    if blue_esports_id or red_esports_id:
+        for t in teams_raw:
+            tid = str(t.get("id", ""))
+            if blue_esports_id and tid == blue_esports_id:
+                blue_raw = t
+            if red_esports_id and tid == red_esports_id:
+                red_raw = t
+
+    # Fallback: use game's teams[].side
+    if (blue_raw is None or red_raw is None) and current_game:
+        game_teams = current_game.get("teams", [])
+        for gt in game_teams:
+            tid = str(gt.get("id", ""))
+            side = (gt.get("side") or "").lower()
+            for t in teams_raw:
+                if str(t.get("id", "")) == tid:
+                    if side == "blue" and blue_raw is None:
+                        blue_raw = t
+                    elif side == "red" and red_raw is None:
+                        red_raw = t
+                    break
+
+    # Fallback by exclusion
+    if blue_raw and not red_raw and len(teams_raw) == 2:
+        red_raw = teams_raw[1] if teams_raw[0].get("id") == blue_raw.get("id") else teams_raw[0]
+    elif red_raw and not blue_raw and len(teams_raw) == 2:
+        blue_raw = teams_raw[1] if teams_raw[0].get("id") == red_raw.get("id") else teams_raw[0]
+
+    # Final fallback to array order
+    if blue_raw is None:
+        blue_raw = teams_raw[0] if len(teams_raw) > 0 else {}
+    if red_raw is None:
+        if len(teams_raw) > 1 and teams_raw[1].get("id") != blue_raw.get("id"):
+            red_raw = teams_raw[1]
+        else:
+            red_raw = {}
+
+    # Match teams to DB
+    blue_db_id = match_team_to_db(blue_raw.get("code", ""), blue_raw.get("name", ""))
+    red_db_id = match_team_to_db(red_raw.get("code", ""), red_raw.get("name", ""))
+
+    # Run predictions
+    prediction = None
+    if draft:
+        try:
+            prediction = predict_draft(draft, blue_team_id=blue_db_id, red_team_id=red_db_id)
+        except Exception:
+            logger.exception("predict_draft failed for match %s", match_id)
+
+    # Analytics enrichment
+    enrichment = None
+    if draft:
+        try:
+            lane_matchups = compute_lane_matchups(draft)
+            blue_synergies = compute_team_synergies(draft, "blue")
+            red_synergies = compute_team_synergies(draft, "red")
+            team_context = None
+            match_prediction = None
+            if blue_db_id and red_db_id:
+                team_context = compute_team_context(blue_db_id, red_db_id)
+                match_prediction = compute_match_prediction(blue_db_id, red_db_id)
+            enrichment = {
+                "lane_matchups": lane_matchups,
+                "synergies": {"blue": blue_synergies, "red": red_synergies},
+                "team_context": team_context,
+                "match_prediction": match_prediction,
+            }
+        except Exception:
+            logger.exception("enrichment failed for match %s", match_id)
+
+    # Build series games info
+    strategy = match_data.get("strategy", {})
+    series_games = None
+    if len(all_games) > 1:
+        series_games = []
+        for g in all_games:
+            if g.get("state") == "unneeded":
+                continue
+            g_teams = g.get("teams", [])
+            blue_g = next((gt for gt in g_teams if (gt.get("side") or "").lower() == "blue"), None)
+            red_g = next((gt for gt in g_teams if (gt.get("side") or "").lower() == "red"), None)
+            series_games.append({
+                "game_id": g.get("id"),
+                "game_number": g.get("number"),
+                "state": g.get("state"),
+                "blue_team_id": str(blue_g.get("id", "")) if blue_g else None,
+                "red_team_id": str(red_g.get("id", "")) if red_g else None,
+                "vod": g.get("vods", [{}])[0].get("parameter") if g.get("vods") else None,
+            })
+
+    # Check if stats are enabled for this league
+    stats_enabled = any(
+        s.get("provider", "").lower() == "youtube" or "twitch" in s.get("provider", "").lower()
+        for s in streams
+    )
+
+    return {
+        "match_id": match_id,
+        "game_id": current_game_id,
+        "start_time": event.get("startTime", ""),
+        "state": current_game.get("state", "") if current_game else "",
+        "block_name": event.get("blockName", ""),
+        "strategy": {"type": strategy.get("type", ""), "count": strategy.get("count", 1)},
+        "league": {
+            "name": league_data.get("name", ""),
+            "slug": league_data.get("slug", ""),
+            "image": league_data.get("image", ""),
+        },
+        "blue_team": {
+            "name": blue_raw.get("name", ""),
+            "code": blue_raw.get("code", ""),
+            "image": blue_raw.get("image", ""),
+            "result": blue_raw.get("result"),
+            "db_id": blue_db_id,
+        },
+        "red_team": {
+            "name": red_raw.get("name", ""),
+            "code": red_raw.get("code", ""),
+            "image": red_raw.get("image", ""),
+            "result": red_raw.get("result"),
+            "db_id": red_db_id,
+        },
+        "patch_version": patch_version,
+        "ddragon_version": ddragon_version,
+        "stats_enabled": stats_enabled,
+        "draft": draft,
+        "live_stats": live_stats,
+        "players": players,
+        "prediction": prediction,
+        "enrichment": enrichment,
+        "series_games": series_games,
+    }

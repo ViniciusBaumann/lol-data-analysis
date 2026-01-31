@@ -1662,6 +1662,34 @@ class LiveGamesView(APIView):
         return Response({"games": games, "count": len(games)})
 
 
+class LiveMatchDetailView(APIView):
+    """API view returning details for a specific match by ID.
+
+    This fetches match data directly using getEventDetails, regardless of
+    whether the match is currently marked as 'inProgress'. This allows
+    viewing matches that may have started early or whose state is stale.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, match_id: str):
+        from .live import get_live_match_data
+
+        try:
+            game = get_live_match_data(match_id)
+        except Exception:
+            logger.exception("Failed to fetch match data for %s", match_id)
+            game = None
+
+        if not game:
+            return Response(
+                {"error": "Match not found or no game data available"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(game)
+
+
 class ScheduleView(APIView):
     """API view returning upcoming and recently completed matches from LoL Esports."""
 
