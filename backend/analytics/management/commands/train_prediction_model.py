@@ -162,7 +162,12 @@ class Command(BaseCommand):
         player_form_history: dict[int, list] = defaultdict(list)
 
         rows = []
-        for match in match_list:
+        total_matches = len(match_list)
+        for idx, match in enumerate(match_list):
+            # Progress indicator every 500 matches
+            if idx % 500 == 0:
+                self.stdout.write(f"  Processing match {idx + 1}/{total_matches} ({100 * idx / total_matches:.1f}%)...")
+                self.stdout.flush()
             blue_id = match.blue_team_id
             red_id = match.red_team_id
             league_id = match.league_id
@@ -536,6 +541,7 @@ class Command(BaseCommand):
                     "gold_per_min": ps.gold_per_min or 0.0,
                 })
 
+        self.stdout.write(f"  Processing complete. Processed {total_matches} matches.")
         self.stdout.write(f"Built {len(rows)} training samples.")
         if rows:
             self.stdout.write(f"Feature vector size: {len(rows[0]['features'])} features")
@@ -631,6 +637,8 @@ class Command(BaseCommand):
             else:
                 model = LGBMRegressor(**params)
 
+            self.stdout.write(f"  {name}: fitting model...")
+            self.stdout.flush()
             model.fit(X_train, y_train)
 
             # Apply calibration for winner classifier
@@ -758,13 +766,18 @@ class Command(BaseCommand):
             scores = cross_val_score(model, X_train, y_train, cv=tscv, scoring=scoring)
             return scores.mean()
 
+        # Progress callback for Optuna
+        def progress_callback(study, trial):
+            if trial.number % 10 == 0:
+                print(f"    Trial {trial.number + 1}/{n_trials} completed (best so far: {study.best_value:.4f})")
+
         # Add pruning for faster optimization
         study = optuna.create_study(
             direction="maximize",
             sampler=optuna.samplers.TPESampler(seed=42, n_startup_trials=20),
             pruner=optuna.pruners.MedianPruner(n_startup_trials=10, n_warmup_steps=5),
         )
-        study.optimize(objective, n_trials=n_trials, show_progress_bar=False, n_jobs=1)
+        study.optimize(objective, n_trials=n_trials, show_progress_bar=False, n_jobs=1, callbacks=[progress_callback])
 
         best = study.best_params
         best["random_state"] = 42
