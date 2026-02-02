@@ -36,7 +36,7 @@ function SeriesTimelineComponent({ games, ddragonVersion, selectedGameNumber, on
       </div>
 
       <div className="flex items-center gap-2 justify-center">
-        {games.map((sg) => {
+        {games.map((sg, idx) => {
           const isCompleted = sg.state === 'completed';
           const isCurrent = sg.is_current;
           const isUnstarted = sg.state === 'unstarted';
@@ -46,7 +46,7 @@ function SeriesTimelineComponent({ games, ddragonVersion, selectedGameNumber, on
 
           return (
             <button
-              key={sg.number}
+              key={sg.game_id || `game-${idx}`}
               onClick={() => handleGameClick(sg)}
               className={cn(
                 'relative flex items-center justify-center w-12 h-12 rounded-lg text-sm font-bold transition-all',

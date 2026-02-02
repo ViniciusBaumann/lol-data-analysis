@@ -1,6 +1,6 @@
 import { memo } from 'react';
-import { TrendingUp, Swords, Target, Mountain, Crown, Clock, ExternalLink } from 'lucide-react';
-import { LiveGameDraft, DraftPredictions, MatchPredictionEnriched } from '@/types';
+import { TrendingUp, Swords, Target, Mountain, Crown, Clock, ExternalLink, Zap, Flame, TrendingDown, Users, Coins } from 'lucide-react';
+import { LiveGameDraft, DraftPredictions, MatchPredictionEnriched, TeamContext } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -64,6 +64,7 @@ interface MatchPredictionPanelProps {
   predictions?: DraftPredictions | null;
   predictionMessage?: string;
   matchPrediction?: MatchPredictionEnriched | null;
+  teamContext?: TeamContext | null;
   blueTeam: { name: string; code: string; image?: string };
   redTeam: { name: string; code: string; image?: string };
   ddragonVersion: string;
@@ -74,12 +75,14 @@ function MatchPredictionPanelComponent({
   predictions,
   predictionMessage,
   matchPrediction,
+  teamContext,
   blueTeam,
   redTeam,
   ddragonVersion,
 }: MatchPredictionPanelProps) {
   const hasPredictions = predictions != null;
   const blueBetter = hasPredictions && predictions.blue_win_prob > predictions.red_win_prob;
+  const hasTeamContext = teamContext != null;
 
   // Get champion names for each position
   const blueChampions = POSITIONS.map((pos) => draft[`blue_${pos}` as keyof LiveGameDraft] as string);
@@ -207,6 +210,151 @@ function MatchPredictionPanelComponent({
                 style={{ width: `${predictions.red_win_prob}%` }}
               />
             </div>
+
+            {/* Key Factors - Fatores Decisivos */}
+            {hasTeamContext && (
+              <div className="pt-2">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Fatores Decisivos</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                  {/* Draft Impact */}
+                  {hasComparison && (() => {
+                    const draftImpact = draftDiff;
+                    const draftColor = draftImpact > 0 ? 'text-blue-400' : draftImpact < 0 ? 'text-red-400' : 'text-zinc-400';
+                    const hasSignificantImpact = Math.abs(draftImpact) >= 3;
+                    return (
+                      <div className="bg-zinc-800/50 rounded-lg p-2 text-center">
+                        <div className="flex items-center justify-center gap-1 mb-0.5">
+                          <Swords size={10} className={hasSignificantImpact ? draftColor : 'text-zinc-500'} />
+                          <span className="text-[9px] text-zinc-500 uppercase">Draft</span>
+                        </div>
+                        <p className={`text-xs font-bold ${draftColor}`}>
+                          {draftImpact > 0 ? '+' : ''}{draftImpact.toFixed(1)}%
+                        </p>
+                        <p className="text-[9px] text-zinc-600">
+                          {draftImpact > 0 ? 'Blue' : draftImpact < 0 ? 'Red' : 'Neutro'}
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ELO Difference */}
+                  {(() => {
+                    const blueElo = teamContext.blue_team.elo.global;
+                    const redElo = teamContext.red_team.elo.global;
+                    const eloDiff = blueElo - redElo;
+                    const eloAdvantage = Math.abs(eloDiff) >= 20;
+                    const eloColor = eloDiff > 0 ? 'text-blue-400' : eloDiff < 0 ? 'text-red-400' : 'text-zinc-400';
+                    return (
+                      <div className="bg-zinc-800/50 rounded-lg p-2 text-center">
+                        <div className="flex items-center justify-center gap-1 mb-0.5">
+                          <Zap size={10} className={eloAdvantage ? eloColor : 'text-zinc-500'} />
+                          <span className="text-[9px] text-zinc-500 uppercase">ELO</span>
+                        </div>
+                        <p className={`text-xs font-bold ${eloColor}`}>
+                          {eloDiff > 0 ? '+' : ''}{Math.round(eloDiff)}
+                        </p>
+                        <p className="text-[9px] text-zinc-600">
+                          {Math.round(blueElo)} vs {Math.round(redElo)}
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Win Rate Last 5 */}
+                  {teamContext.blue_team.stats && teamContext.red_team.stats && (() => {
+                    const blueWR = teamContext.blue_team.stats.win_rate_last5;
+                    const redWR = teamContext.red_team.stats.win_rate_last5;
+                    const wrDiff = blueWR - redWR;
+                    const wrColor = wrDiff > 0 ? 'text-blue-400' : wrDiff < 0 ? 'text-red-400' : 'text-zinc-400';
+                    return (
+                      <div className="bg-zinc-800/50 rounded-lg p-2 text-center">
+                        <div className="flex items-center justify-center gap-1 mb-0.5">
+                          <Flame size={10} className={Math.abs(wrDiff) >= 20 ? wrColor : 'text-zinc-500'} />
+                          <span className="text-[9px] text-zinc-500 uppercase">Forma</span>
+                        </div>
+                        <p className={`text-xs font-bold ${wrColor}`}>
+                          {wrDiff > 0 ? '+' : ''}{wrDiff.toFixed(0)}%
+                        </p>
+                        <p className="text-[9px] text-zinc-600">
+                          {blueWR.toFixed(0)}% vs {redWR.toFixed(0)}%
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Gold Diff @15 */}
+                  {teamContext.blue_team.stats && teamContext.red_team.stats && (() => {
+                    const blueGold = teamContext.blue_team.stats.avg_golddiffat15;
+                    const redGold = teamContext.red_team.stats.avg_golddiffat15;
+                    const goldDiff = blueGold - redGold;
+                    const goldColor = goldDiff > 0 ? 'text-blue-400' : goldDiff < 0 ? 'text-red-400' : 'text-zinc-400';
+                    return (
+                      <div className="bg-zinc-800/50 rounded-lg p-2 text-center">
+                        <div className="flex items-center justify-center gap-1 mb-0.5">
+                          <Coins size={10} className={Math.abs(goldDiff) >= 500 ? goldColor : 'text-zinc-500'} />
+                          <span className="text-[9px] text-zinc-500 uppercase">Gold@15</span>
+                        </div>
+                        <p className={`text-xs font-bold ${goldColor}`}>
+                          {goldDiff > 0 ? '+' : ''}{Math.round(goldDiff)}
+                        </p>
+                        <p className="text-[9px] text-zinc-600">
+                          {blueGold > 0 ? '+' : ''}{Math.round(blueGold)} vs {redGold > 0 ? '+' : ''}{Math.round(redGold)}
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* H2H */}
+                  {teamContext.h2h.total_games > 0 && (() => {
+                    const blueH2H = teamContext.h2h.blue_win_rate;
+                    const redH2H = teamContext.h2h.red_win_rate;
+                    const h2hDiff = blueH2H - redH2H;
+                    const h2hColor = h2hDiff > 0 ? 'text-blue-400' : h2hDiff < 0 ? 'text-red-400' : 'text-zinc-400';
+                    return (
+                      <div className="bg-zinc-800/50 rounded-lg p-2 text-center">
+                        <div className="flex items-center justify-center gap-1 mb-0.5">
+                          <Users size={10} className={Math.abs(h2hDiff) >= 20 ? h2hColor : 'text-zinc-500'} />
+                          <span className="text-[9px] text-zinc-500 uppercase">H2H</span>
+                        </div>
+                        <p className={`text-xs font-bold ${h2hColor}`}>
+                          {blueH2H.toFixed(0)}% - {redH2H.toFixed(0)}%
+                        </p>
+                        <p className="text-[9px] text-zinc-600">
+                          {teamContext.h2h.total_games} jogos
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Streak */}
+                  {teamContext.blue_team.stats && teamContext.red_team.stats && (() => {
+                    const blueStreak = teamContext.blue_team.stats.streak;
+                    const redStreak = teamContext.red_team.stats.streak;
+                    const streakDiff = blueStreak - redStreak;
+                    const streakColor = streakDiff > 0 ? 'text-blue-400' : streakDiff < 0 ? 'text-red-400' : 'text-zinc-400';
+                    const formatStreak = (s: number) => s > 0 ? `${s}W` : s < 0 ? `${Math.abs(s)}L` : '0';
+                    return (
+                      <div className="bg-zinc-800/50 rounded-lg p-2 text-center">
+                        <div className="flex items-center justify-center gap-1 mb-0.5">
+                          {streakDiff >= 0 ? (
+                            <TrendingUp size={10} className={Math.abs(streakDiff) >= 2 ? streakColor : 'text-zinc-500'} />
+                          ) : (
+                            <TrendingDown size={10} className={Math.abs(streakDiff) >= 2 ? streakColor : 'text-zinc-500'} />
+                          )}
+                          <span className="text-[9px] text-zinc-500 uppercase">Streak</span>
+                        </div>
+                        <p className={`text-xs font-bold ${streakColor}`}>
+                          {formatStreak(blueStreak)} vs {formatStreak(redStreak)}
+                        </p>
+                        <p className="text-[9px] text-zinc-600">
+                          sequencia
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
 
             {/* Predicted Stats */}
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
