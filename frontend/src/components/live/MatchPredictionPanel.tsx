@@ -1,6 +1,6 @@
 import { memo } from 'react';
-import { TrendingUp, Swords, Target, Mountain, Crown, Clock, ExternalLink, Zap, Flame, TrendingDown, Users, Coins } from 'lucide-react';
-import { LiveGameDraft, DraftPredictions, MatchPredictionEnriched, TeamContext } from '@/types';
+import { TrendingUp, Swords, Target, Mountain, Crown, Clock, ExternalLink, Zap, Flame, TrendingDown, Users, Coins, Sparkles } from 'lucide-react';
+import { LiveGameDraft, DraftPredictions, MatchPredictionEnriched, TeamContext, CompositionAnalysis, CompositionScores } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -65,9 +65,29 @@ interface MatchPredictionPanelProps {
   predictionMessage?: string;
   matchPrediction?: MatchPredictionEnriched | null;
   teamContext?: TeamContext | null;
+  composition?: CompositionAnalysis | null;
   blueTeam: { name: string; code: string; image?: string };
   redTeam: { name: string; code: string; image?: string };
   ddragonVersion: string;
+}
+
+// Composition type labels and colors
+const COMP_TYPES: { key: keyof CompositionScores; label: string; icon: string }[] = [
+  { key: 'early_game', label: 'Early', icon: '⚡' },
+  { key: 'scaling', label: 'Scale', icon: '📈' },
+  { key: 'teamfight', label: 'TF', icon: '⚔️' },
+  { key: 'splitpush', label: 'Split', icon: '🏃' },
+  { key: 'poke', label: 'Poke', icon: '🎯' },
+  { key: 'engage', label: 'Engage', icon: '🚀' },
+  { key: 'pick', label: 'Pick', icon: '🎣' },
+];
+
+function getTopCompTypes(scores: CompositionScores, threshold: number = 0.4): { key: keyof CompositionScores; value: number }[] {
+  return COMP_TYPES
+    .map(t => ({ key: t.key, value: scores[t.key] }))
+    .filter(t => t.value >= threshold)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 3);
 }
 
 function MatchPredictionPanelComponent({
@@ -76,6 +96,7 @@ function MatchPredictionPanelComponent({
   predictionMessage,
   matchPrediction,
   teamContext,
+  composition,
   blueTeam,
   redTeam,
   ddragonVersion,
@@ -83,6 +104,7 @@ function MatchPredictionPanelComponent({
   const hasPredictions = predictions != null;
   const blueBetter = hasPredictions && predictions.blue_win_prob > predictions.red_win_prob;
   const hasTeamContext = teamContext != null;
+  const hasComposition = composition != null;
 
   // Get champion names for each position
   const blueChampions = POSITIONS.map((pos) => draft[`blue_${pos}` as keyof LiveGameDraft] as string);
@@ -196,6 +218,61 @@ function MatchPredictionPanelComponent({
             </div>
           </div>
         </div>
+
+        {/* Composition Analysis */}
+        {hasComposition && (
+          <div className="flex items-center justify-between gap-4 px-2">
+            {/* Blue Composition */}
+            <div className="flex-1">
+              <div className="flex items-center gap-1 flex-wrap">
+                {getTopCompTypes(composition.blue).map(({ key, value }) => {
+                  const compType = COMP_TYPES.find(t => t.key === key)!;
+                  return (
+                    <span
+                      key={key}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-[10px] font-medium text-blue-400"
+                      title={`${compType.label}: ${Math.round(value * 100)}%`}
+                    >
+                      <span>{compType.icon}</span>
+                      <span>{compType.label}</span>
+                    </span>
+                  );
+                })}
+                {getTopCompTypes(composition.blue).length === 0 && (
+                  <span className="text-[10px] text-zinc-500">Comp balanceada</span>
+                )}
+              </div>
+            </div>
+
+            {/* Separator */}
+            <div className="flex items-center gap-1 text-zinc-600">
+              <Sparkles size={12} />
+              <span className="text-[9px] uppercase tracking-wider">Comp</span>
+            </div>
+
+            {/* Red Composition */}
+            <div className="flex-1">
+              <div className="flex items-center gap-1 flex-wrap justify-end">
+                {getTopCompTypes(composition.red).map(({ key, value }) => {
+                  const compType = COMP_TYPES.find(t => t.key === key)!;
+                  return (
+                    <span
+                      key={key}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-[10px] font-medium text-red-400"
+                      title={`${compType.label}: ${Math.round(value * 100)}%`}
+                    >
+                      <span>{compType.icon}</span>
+                      <span>{compType.label}</span>
+                    </span>
+                  );
+                })}
+                {getTopCompTypes(composition.red).length === 0 && (
+                  <span className="text-[10px] text-zinc-500">Comp balanceada</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Win Probability Bar or Unavailable Message */}
         {hasPredictions ? (

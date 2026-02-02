@@ -5,6 +5,11 @@ Enhanced with:
 - Extended early game features (XP diff, CS diff)
 - Team damage type balance
 - Improved hyperparameter tuning
+- Patch-specific champion win rates
+- Tournament stage/pressure indicators
+- Team composition analysis
+- Lane matchup advantages
+- Player individual form
 """
 
 import json
@@ -25,9 +30,40 @@ from analytics.prediction import (
     clear_model_cache,
     get_feature_names,
 )
+from analytics.prediction_features import (
+    compute_team_comp_features,
+    compute_tournament_features,
+    compute_lane_matchup_features,
+    compute_player_form_features,
+    parse_patch_to_numeric,
+    get_champion_tags,
+)
 
-# Extended position stats for enhanced features
-EXTENDED_POSITION_STATS = ["kda", "cs_per_min", "damage_per_min", "gold_per_min", "vision_score", "kill_participation"]
+# =============================================================================
+# MODEL CONFIGURATION CONSTANTS
+# =============================================================================
+
+# WINDOW: Number of recent matches to consider for rolling team statistics.
+# A window of 10 balances recency (capturing current form) with stability
+# (avoiding noise from single-game variance). Used for computing averages
+# like win rate, kills, objectives, etc.
+WINDOW = 10
+
+# DECAY_FACTOR: ELO decay applied when a new split/season starts (0.0-1.0).
+# Value of 0.75 means ELO regresses 25% toward baseline (1500) between splits.
+# This accounts for roster changes, meta shifts, and practice gaps.
+# Formula: new_elo = 1500 + DECAY_FACTOR * (old_elo - 1500)
+DECAY_FACTOR = 0.75
+
+# PLAYER_FORM_WINDOW: Number of recent games to consider for individual player
+# performance tracking. Smaller than team WINDOW because player form is more
+# volatile and recent performance is more predictive of current skill.
+PLAYER_FORM_WINDOW = 10
+
+# MIN_HISTORY_GAMES: Minimum number of historical games required for a team
+# before including the match in training data. Ensures sufficient data for
+# reliable feature computation. Value of 3 provides basic statistical stability.
+MIN_HISTORY_GAMES = 3
 
 
 class Command(BaseCommand):
@@ -49,8 +85,8 @@ class Command(BaseCommand):
         parser.add_argument(
             "--decay-factor",
             type=float,
-            default=0.75,
-            help="Split decay factor (0-1). Default: 0.75",
+            default=DECAY_FACTOR,
+            help=f"Split decay factor (0-1). Default: {DECAY_FACTOR}",
         )
 
     def handle(self, *args, **options):
@@ -103,7 +139,6 @@ class Command(BaseCommand):
         team_history: dict[int, list[dict]] = defaultdict(list)
         team_last_roster: dict[int, frozenset] = {}
         team_roster_change_idx: dict[int, int] = defaultdict(int)
-        WINDOW = 10
 
         # In-memory ELO trackers keyed by (team_id, league_id)
         elo_tracker: dict[tuple, float] = defaultdict(lambda: 1500.0)
@@ -115,6 +150,16 @@ class Command(BaseCommand):
 
         # Split decay tracker
         team_last_split: dict[tuple, tuple] = {}
+
+        # Advanced feature trackers
+        # 1. Patch-specific champion stats: (champion, position, patch) -> list of records
+        champion_patch_history: dict[tuple, list] = defaultdict(list)
+
+        # 5. Lane matchup history: (champ1, champ2, position) -> list of records (alphabetically ordered)
+        matchup_history: dict[tuple, list] = defaultdict(list)
+
+        # 6. Player individual form: player_id -> list of recent game records
+        player_form_history: dict[int, list] = defaultdict(list)
 
         rows = []
         for match in match_list:
@@ -129,6 +174,10 @@ class Command(BaseCommand):
             red_stat = stats_by_match.get(match.id, {}).get(red_id)
             if not blue_stat or not red_stat:
                 continue
+
+            # Get player lists early (needed for both features and accumulator updates)
+            blue_player_list = player_stats_by_match.get(match.id, {}).get(blue_id, [])
+            red_player_list = player_stats_by_match.get(match.id, {}).get(red_id, [])
 
             # Split decay BEFORE reading ELO
             current_split = (match.year, match.split) if match.split else None
@@ -148,12 +197,23 @@ class Command(BaseCommand):
                 red_id, team_history, team_roster_change_idx, WINDOW
             )
 
-            if len(blue_hist) >= 3 and len(red_hist) >= 3:
+            if len(blue_hist) >= MIN_HISTORY_GAMES and len(red_hist) >= MIN_HISTORY_GAMES:
                 blue_features = self._compute_features_from_history(blue_hist)
                 red_features = self._compute_features_from_history(red_hist)
                 h2h_features = self._compute_h2h_from_history(blue_id, red_id, match_list, match)
 
-                feature_keys = list(blue_features.keys())
+                # Explicit feature key order to ensure consistency across training and inference
+                # Must match the order in prediction.py build_matchup_features() and get_feature_names()
+                feature_keys = [
+                    "win_rate", "avg_kills", "avg_deaths", "avg_towers", "avg_dragons",
+                    "avg_barons", "avg_heralds", "avg_voidgrubs", "avg_inhibitors",
+                    "first_blood_rate", "first_tower_rate", "first_dragon_rate",
+                    "first_herald_rate", "first_baron_rate",
+                    "avg_golddiffat10", "avg_golddiffat15",
+                    "avg_xpdiffat10", "avg_xpdiffat15", "avg_csdiffat10", "avg_csdiffat15",
+                    "avg_game_length", "win_rate_last3", "win_rate_last5",
+                    "streak", "momentum", "blue_win_rate", "red_win_rate",
+                ]
 
                 t1_vals = [blue_features[k] for k in feature_keys]
                 t2_vals = [red_features[k] for k in feature_keys]
@@ -197,7 +257,152 @@ class Command(BaseCommand):
                 t1_pos_vals = [blue_pos_features[k] for k in pos_feature_keys]
                 t2_pos_vals = [red_pos_features[k] for k in pos_feature_keys]
 
-                all_features = t1_vals + t2_vals + diff_vals + h2h_vals + elo_vals + t1_pos_vals + t2_pos_vals
+                # === ADVANCED FEATURES ===
+
+                # 3. Tournament stage features
+                tournament_feats = compute_tournament_features(match, getattr(match, 'playoffs', False))
+                tournament_vals = [
+                    tournament_feats["is_playoffs"],
+                    tournament_feats["is_finals"],
+                    tournament_feats["stage_importance"],
+                    tournament_feats["stage_code"],
+                ]
+
+                # Get champions and players for this match
+                blue_champions = {}
+                red_champions = {}
+                blue_player_ids = {}
+                red_player_ids = {}
+
+                blue_player_list = player_stats_by_match.get(match.id, {}).get(blue_id, [])
+                red_player_list = player_stats_by_match.get(match.id, {}).get(red_id, [])
+
+                for ps in blue_player_list:
+                    pos = ps.position.lower()
+                    if pos in POSITIONS:
+                        blue_champions[pos] = ps.champion
+                        blue_player_ids[pos] = ps.player_id
+
+                for ps in red_player_list:
+                    pos = ps.position.lower()
+                    if pos in POSITIONS:
+                        red_champions[pos] = ps.champion
+                        red_player_ids[pos] = ps.player_id
+
+                # 4. Team composition features
+                blue_comp_feats = compute_team_comp_features(blue_champions, "blue")
+                red_comp_feats = compute_team_comp_features(red_champions, "red")
+
+                comp_vals = []
+                for key in [
+                    "comp_early_game", "comp_scaling", "comp_teamfight", "comp_splitpush",
+                    "comp_poke", "comp_engage", "comp_pick", "comp_ap_count", "comp_ad_count",
+                    "comp_has_tank", "comp_has_engage", "comp_has_hypercarry",
+                    "comp_has_assassin", "comp_has_peel", "comp_hypercarry_with_peel",
+                    "comp_engage_with_followup",
+                ]:
+                    comp_vals.append(blue_comp_feats.get(f"blue_{key}", 0.0))
+                for key in [
+                    "comp_early_game", "comp_scaling", "comp_teamfight", "comp_splitpush",
+                    "comp_poke", "comp_engage", "comp_pick", "comp_ap_count", "comp_ad_count",
+                    "comp_has_tank", "comp_has_engage", "comp_has_hypercarry",
+                    "comp_has_assassin", "comp_has_peel", "comp_hypercarry_with_peel",
+                    "comp_engage_with_followup",
+                ]:
+                    comp_vals.append(red_comp_feats.get(f"red_{key}", 0.0))
+
+                # Comp differential features
+                comp_diff_vals = [
+                    blue_comp_feats.get("blue_comp_early_game", 0) - red_comp_feats.get("red_comp_early_game", 0),
+                    blue_comp_feats.get("blue_comp_scaling", 0) - red_comp_feats.get("red_comp_scaling", 0),
+                    blue_comp_feats.get("blue_comp_teamfight", 0) - red_comp_feats.get("red_comp_teamfight", 0),
+                    blue_comp_feats.get("blue_comp_engage", 0) - red_comp_feats.get("red_comp_engage", 0),
+                ]
+
+                # 5. Lane matchup features
+                matchup_feats = compute_lane_matchup_features(blue_champions, red_champions, matchup_history)
+                matchup_vals = [
+                    matchup_feats.get("matchup_top_advantage", 0.0),
+                    matchup_feats.get("matchup_jng_advantage", 0.0),
+                    matchup_feats.get("matchup_mid_advantage", 0.0),
+                    matchup_feats.get("matchup_bot_advantage", 0.0),
+                    matchup_feats.get("matchup_sup_advantage", 0.0),
+                    matchup_feats.get("matchup_total_advantage", 0.0),
+                ]
+
+                # 6. Player form features
+                player_form_vals = []
+                for pos in POSITIONS:
+                    blue_pid = blue_player_ids.get(pos)
+                    if blue_pid and blue_pid in player_form_history:
+                        p_hist = player_form_history[blue_pid][-PLAYER_FORM_WINDOW:]
+                        if len(p_hist) >= 2:
+                            p_wins = sum(1 for h in p_hist if h.get("is_winner", False))
+                            p_kda = sum(h.get("kda", 0) for h in p_hist) / len(p_hist)
+                            player_form_vals.extend([p_wins / len(p_hist), p_kda])
+                        else:
+                            player_form_vals.extend([0.5, 3.0])
+                    else:
+                        player_form_vals.extend([0.5, 3.0])
+
+                for pos in POSITIONS:
+                    red_pid = red_player_ids.get(pos)
+                    if red_pid and red_pid in player_form_history:
+                        p_hist = player_form_history[red_pid][-PLAYER_FORM_WINDOW:]
+                        if len(p_hist) >= 2:
+                            p_wins = sum(1 for h in p_hist if h.get("is_winner", False))
+                            p_kda = sum(h.get("kda", 0) for h in p_hist) / len(p_hist)
+                            player_form_vals.extend([p_wins / len(p_hist), p_kda])
+                        else:
+                            player_form_vals.extend([0.5, 3.0])
+                    else:
+                        player_form_vals.extend([0.5, 3.0])
+
+                # Player form advantage
+                blue_form_avg = sum(player_form_vals[i] for i in range(0, 10, 2)) / 5.0
+                red_form_avg = sum(player_form_vals[i] for i in range(10, 20, 2)) / 5.0
+                player_form_vals.extend([blue_form_avg, red_form_avg, blue_form_avg - red_form_avg])
+
+                # 1. Patch features
+                patch_numeric = parse_patch_to_numeric(match.patch or "")
+
+                # Compute average patch win rate for each team's champions
+                blue_patch_wr_sum = 0.0
+                red_patch_wr_sum = 0.0
+                blue_patch_count = 0
+                red_patch_count = 0
+
+                for pos, champ in blue_champions.items():
+                    key = (champ, pos, match.patch)
+                    hist = champion_patch_history.get(key, [])
+                    if len(hist) >= 3:
+                        wins = sum(1 for h in hist if h.get("is_winner", False))
+                        blue_patch_wr_sum += wins / len(hist)
+                        blue_patch_count += 1
+
+                for pos, champ in red_champions.items():
+                    key = (champ, pos, match.patch)
+                    hist = champion_patch_history.get(key, [])
+                    if len(hist) >= 3:
+                        wins = sum(1 for h in hist if h.get("is_winner", False))
+                        red_patch_wr_sum += wins / len(hist)
+                        red_patch_count += 1
+
+                avg_blue_patch_wr = blue_patch_wr_sum / blue_patch_count if blue_patch_count > 0 else 0.5
+                avg_red_patch_wr = red_patch_wr_sum / red_patch_count if red_patch_count > 0 else 0.5
+
+                patch_vals = [
+                    patch_numeric,
+                    avg_blue_patch_wr,
+                    avg_red_patch_wr,
+                    avg_blue_patch_wr - avg_red_patch_wr,
+                ]
+
+                # Combine all features
+                all_features = (
+                    t1_vals + t2_vals + diff_vals + h2h_vals + elo_vals + t1_pos_vals + t2_pos_vals +
+                    tournament_vals + comp_vals + comp_diff_vals + matchup_vals + player_form_vals + patch_vals
+                )
 
                 # Targets
                 team1_wins = 1 if match.winner_id == blue_id else 0
@@ -255,10 +460,6 @@ class Command(BaseCommand):
             side_matches_blue[blue_key] += 1
             side_matches_red[red_key] += 1
 
-            # Build player stats for this match record
-            blue_player_list = player_stats_by_match.get(match.id, {}).get(blue_id, [])
-            red_player_list = player_stats_by_match.get(match.id, {}).get(red_id, [])
-
             # Add current match to history (AFTER using features, to avoid leakage)
             match_record = self._match_to_record(blue_stat, match, blue_player_list)
             team_history[blue_id].append(match_record)
@@ -276,7 +477,68 @@ class Command(BaseCommand):
                 if current_roster:
                     team_last_roster[tid] = current_roster
 
+            # Update advanced feature accumulators AFTER using them
+            # 1. Patch-specific champion history
+            for ps in blue_player_list + red_player_list:
+                pos = ps.position.lower()
+                if pos in POSITIONS and ps.champion and match.patch:
+                    ts = stats_by_match.get(match.id, {}).get(ps.team_id)
+                    is_winner = ts.is_winner if ts else False
+                    key = (ps.champion, pos, match.patch)
+                    champion_patch_history[key].append({
+                        "is_winner": is_winner,
+                        "kda": ps.kda or 0.0,
+                    })
+
+            # 5. Lane matchup history
+            for pos in POSITIONS:
+                blue_champ = None
+                red_champ = None
+                blue_ps = None
+                red_ps = None
+
+                for ps in blue_player_list:
+                    if ps.position.lower() == pos:
+                        blue_champ = ps.champion
+                        blue_ps = ps
+                        break
+                for ps in red_player_list:
+                    if ps.position.lower() == pos:
+                        red_champ = ps.champion
+                        red_ps = ps
+                        break
+
+                if blue_champ and red_champ:
+                    # Normalize key (alphabetical order)
+                    if blue_champ < red_champ:
+                        key = (blue_champ, red_champ, pos)
+                        blue_is_first = True
+                    else:
+                        key = (red_champ, blue_champ, pos)
+                        blue_is_first = False
+
+                    blue_ts = stats_by_match.get(match.id, {}).get(blue_id)
+                    blue_won = blue_ts.is_winner if blue_ts else False
+
+                    matchup_history[key].append({
+                        "winner_is_first": blue_won if blue_is_first else not blue_won,
+                    })
+
+            # 6. Player form history
+            for ps in blue_player_list + red_player_list:
+                ts = stats_by_match.get(match.id, {}).get(ps.team_id)
+                is_winner = ts.is_winner if ts else False
+                player_form_history[ps.player_id].append({
+                    "is_winner": is_winner,
+                    "kda": ps.kda or 0.0,
+                    "cs_per_min": ps.cs_per_min or 0.0,
+                    "damage_per_min": ps.damage_per_min or 0.0,
+                    "gold_per_min": ps.gold_per_min or 0.0,
+                })
+
         self.stdout.write(f"Built {len(rows)} training samples.")
+        if rows:
+            self.stdout.write(f"Feature vector size: {len(rows[0]['features'])} features")
 
         if len(rows) < 30:
             self.stderr.write(

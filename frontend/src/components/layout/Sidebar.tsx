@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Swords, GitCompare, Crosshair, Shield, Radio, BarChart3, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, Swords, GitCompare, Crosshair, Shield, Radio, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -38,9 +38,9 @@ export function Sidebar() {
         mobileOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="p-6 border-b border-border">
-          <Link to="/" className="flex items-center gap-2">
-            <BarChart3 className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold text-foreground">Datanalys</span>
+          <Link to="/" className="flex items-center gap-3">
+            <img src="/icon.png" alt="ProbLens" className="h-10 w-10 object-contain" />
+            <span className="text-xl font-bold text-foreground">ProbLens</span>
           </Link>
           <p className="text-xs text-muted-foreground mt-1">LoL eSports Analytics</p>
         </div>

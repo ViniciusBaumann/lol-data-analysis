@@ -393,8 +393,24 @@ export interface DraftPredictions {
   barons_range?: [number, number];
 }
 
+export interface CompositionScores {
+  early_game: number;
+  scaling: number;
+  teamfight: number;
+  splitpush: number;
+  poke: number;
+  engage: number;
+  pick: number;
+}
+
+export interface CompositionAnalysis {
+  blue: CompositionScores;
+  red: CompositionScores;
+}
+
 export interface DraftPredictionResponse {
   predictions: DraftPredictions | null;
+  composition?: CompositionAnalysis;
   features_available: boolean;
   models_loaded: boolean;
   teams_provided?: boolean;
@@ -494,6 +510,7 @@ export interface LiveGamePlayers {
 
 export interface LiveGamePrediction {
   predictions: DraftPredictions | null;
+  composition?: CompositionAnalysis;
   features_available: boolean;
   models_loaded: boolean;
   teams_provided?: boolean;

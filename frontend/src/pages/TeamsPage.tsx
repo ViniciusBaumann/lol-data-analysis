@@ -1,249 +1,117 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, Users, Trophy, ChevronDown, ChevronRight } from 'lucide-react';
-import { useStandings } from '@/hooks/useTeams';
-import { FilterBar } from '@/components/common/FilterBar';
-import { WinRateBar } from '@/components/common/WinRateBar';
+import { useNavigate } from 'react-router-dom';
+import {
+  Users,
+  Trophy,
+  MapPin,
+  ChevronRight,
+} from 'lucide-react';
+import { useLeagues } from '@/hooks/useLeagues';
 import { Loading } from '@/components/common/Loading';
-import { ErrorMessage } from '@/components/common/ErrorMessage';
-import { cn } from '@/lib/utils';
+
+const REGION_COLORS: Record<string, string> = {
+  Korea: 'from-blue-500/20 to-blue-900/10 border-blue-500/30',
+  China: 'from-red-500/20 to-red-900/10 border-red-500/30',
+  Europe: 'from-emerald-500/20 to-emerald-900/10 border-emerald-500/30',
+  'North America': 'from-violet-500/20 to-violet-900/10 border-violet-500/30',
+  Brazil: 'from-yellow-500/20 to-yellow-900/10 border-yellow-500/30',
+  International: 'from-amber-500/20 to-amber-900/10 border-amber-500/30',
+};
+
+const REGION_ACCENT: Record<string, string> = {
+  Korea: 'text-blue-400',
+  China: 'text-red-400',
+  Europe: 'text-emerald-400',
+  'North America': 'text-violet-400',
+  Brazil: 'text-yellow-400',
+  International: 'text-amber-400',
+};
+
+function getRegionColor(region: string): string {
+  return REGION_COLORS[region] || 'from-primary/20 to-primary/5 border-primary/30';
+}
+
+function getRegionAccent(region: string): string {
+  return REGION_ACCENT[region] || 'text-primary';
+}
 
 export default function TeamsPage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  const [searchInput, setSearchInput] = useState(
-    searchParams.get('search') || ''
-  );
-  const [debouncedSearch, setDebouncedSearch] = useState(
-    searchParams.get('search') || ''
-  );
-  const [filters, setFilters] = useState<{
-    league?: number;
-    year?: number;
-    split?: string;
-  }>({
-    league: searchParams.get('league')
-      ? Number(searchParams.get('league'))
-      : undefined,
-    year: searchParams.get('year')
-      ? Number(searchParams.get('year'))
-      : undefined,
-    split: searchParams.get('split') || undefined,
-  });
-  const [expandedLeagues, setExpandedLeagues] = useState<Set<number>>(
-    new Set()
-  );
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchInput);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [searchInput]);
-
-  useEffect(() => {
-    const params: Record<string, string> = {};
-    if (debouncedSearch) params.search = debouncedSearch;
-    if (filters.league) params.league = String(filters.league);
-    if (filters.year) params.year = String(filters.year);
-    if (filters.split) params.split = filters.split;
-    setSearchParams(params, { replace: true });
-  }, [debouncedSearch, filters, setSearchParams]);
-
-  const { data, loading, error } = useStandings({
-    league: filters.league,
-    year: filters.year,
-    split: filters.split,
-    search: debouncedSearch || undefined,
-  });
-
-  // Auto-expand all leagues when data loads or filters change
-  useEffect(() => {
-    if (data.length > 0) {
-      setExpandedLeagues(new Set(data.map((s) => s.league.id)));
-    }
-  }, [data]);
-
-  function handleFilterChange(newFilters: {
-    league?: number;
-    year?: number;
-    split?: string;
-  }) {
-    setFilters(newFilters);
-  }
-
-  function toggleLeague(leagueId: number) {
-    setExpandedLeagues((prev) => {
-      const next = new Set(prev);
-      if (next.has(leagueId)) {
-        next.delete(leagueId);
-      } else {
-        next.add(leagueId);
-      }
-      return next;
-    });
-  }
-
-  const totalTeams = data.reduce((sum, s) => sum + s.teams.length, 0);
+  const { data: leagues, loading } = useLeagues({ year: 2026 });
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Users className="h-7 w-7 text-primary" />
-        <h1 className="text-2xl font-bold text-foreground">Times</h1>
-      </div>
-
-      {/* Search + Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-          />
-          <input
-            type="text"
-            placeholder="Buscar time..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className="w-full bg-secondary border border-border rounded-lg pl-9 pr-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          />
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Times</h1>
+          <p className="text-sm text-muted-foreground">
+            Selecione uma liga para ver seus times
+          </p>
         </div>
-        <FilterBar filters={filters} onChange={handleFilterChange} />
       </div>
 
       {/* Content */}
       {loading && <Loading />}
-      {error && <ErrorMessage message={error} />}
 
-      {!loading && !error && (
-        <>
-          <p className="text-sm text-muted-foreground">
-            {totalTeams} {totalTeams === 1 ? 'time' : 'times'} em{' '}
-            {data.length} {data.length === 1 ? 'liga' : 'ligas'}
-          </p>
+      {!loading && leagues.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground">
+          Nenhuma liga encontrada.
+        </div>
+      )}
 
-          {data.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              Nenhum time encontrado com os filtros selecionados.
+      {!loading && leagues.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {leagues.map((league) => (
+            <div
+              key={league.id}
+              onClick={() => navigate(`/teams/league/${league.id}`)}
+              className={`
+                relative bg-gradient-to-br ${getRegionColor(league.region)}
+                border rounded-xl p-5 cursor-pointer
+                hover:scale-[1.02] hover:shadow-lg hover:shadow-black/20
+                transition-all duration-200 group
+              `}
+            >
+              {/* League name */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Trophy
+                    size={20}
+                    className={getRegionAccent(league.region)}
+                  />
+                  <h2 className="text-base font-semibold text-foreground truncate">
+                    {league.name}
+                  </h2>
+                </div>
+                <ChevronRight
+                  size={18}
+                  className="text-muted-foreground shrink-0 group-hover:text-foreground group-hover:translate-x-0.5 transition-all"
+                />
+              </div>
+
+              {/* Region */}
+              <div className="flex items-center gap-1.5 mt-3">
+                <MapPin size={13} className="text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">
+                  {league.region}
+                </span>
+              </div>
+
+              {/* Match count */}
+              <div className="mt-4 pt-3 border-t border-border/50">
+                <div className="flex items-baseline gap-1.5">
+                  <span className={`text-2xl font-bold ${getRegionAccent(league.region)}`}>
+                    {league.total_matches ?? 0}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {league.total_matches === 1 ? 'partida' : 'partidas'}
+                  </span>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {data.map((standing) => {
-                const isExpanded = expandedLeagues.has(standing.league.id);
-
-                return (
-                  <div
-                    key={standing.league.id}
-                    className="bg-card border border-border rounded-lg overflow-hidden"
-                  >
-                    {/* League Header */}
-                    <button
-                      onClick={() => toggleLeague(standing.league.id)}
-                      className="w-full px-5 py-3 border-b border-border bg-secondary/40 flex items-center gap-2 hover:bg-secondary/60 transition-colors"
-                    >
-                      {isExpanded ? (
-                        <ChevronDown size={16} className="text-muted-foreground" />
-                      ) : (
-                        <ChevronRight size={16} className="text-muted-foreground" />
-                      )}
-                      <Trophy size={16} className="text-primary" />
-                      <h2 className="text-sm font-semibold text-foreground">
-                        {standing.league.name}
-                      </h2>
-                      <span className="text-xs text-muted-foreground ml-auto">
-                        {standing.teams.length}{' '}
-                        {standing.teams.length === 1 ? 'time' : 'times'}
-                      </span>
-                    </button>
-
-                    {/* Standings Table */}
-                    {isExpanded && (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-border text-muted-foreground">
-                              <th className="text-center py-3 px-3 font-medium w-12">
-                                #
-                              </th>
-                              <th className="text-left py-3 px-3 font-medium">
-                                Time
-                              </th>
-                              <th className="text-center py-3 px-3 font-medium">
-                                J
-                              </th>
-                              <th className="text-center py-3 px-3 font-medium">
-                                V
-                              </th>
-                              <th className="text-center py-3 px-3 font-medium">
-                                D
-                              </th>
-                              <th className="text-left py-3 px-3 font-medium min-w-[160px]">
-                                Win Rate
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {standing.teams.map((team, index) => (
-                              <tr
-                                key={team.id}
-                                onClick={() => navigate(`/teams/${team.id}`)}
-                                className={cn(
-                                  'border-b border-border/50 hover:bg-secondary/50 transition-colors cursor-pointer',
-                                  index < 3 && 'bg-primary/[0.03]'
-                                )}
-                              >
-                                <td className="py-3 px-3 text-center">
-                                  <span
-                                    className={cn(
-                                      'inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold',
-                                      index === 0 &&
-                                        'bg-yellow-500/20 text-yellow-400',
-                                      index === 1 &&
-                                        'bg-gray-400/20 text-gray-300',
-                                      index === 2 &&
-                                        'bg-amber-700/20 text-amber-600',
-                                      index > 2 && 'text-muted-foreground'
-                                    )}
-                                  >
-                                    {index + 1}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-3">
-                                  <span className="font-medium text-foreground hover:text-primary transition-colors">
-                                    {team.name}
-                                  </span>
-                                  {team.short_name && (
-                                    <span className="text-muted-foreground ml-2 text-xs">
-                                      ({team.short_name})
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="py-3 px-3 text-center text-muted-foreground">
-                                  {team.total_matches}
-                                </td>
-                                <td className="py-3 px-3 text-center text-green-400 font-medium">
-                                  {team.wins}
-                                </td>
-                                <td className="py-3 px-3 text-center text-red-400 font-medium">
-                                  {team.losses}
-                                </td>
-                                <td className="py-3 px-3">
-                                  <WinRateBar winRate={team.win_rate} />
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </>
+          ))}
+        </div>
       )}
     </div>
   );
