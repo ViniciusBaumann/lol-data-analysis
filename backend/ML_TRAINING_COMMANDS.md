@@ -76,6 +76,25 @@ Trains LightGBM models for match outcome prediction:
 - **total_barons**: Total barons regressor
 - **game_time**: Game duration regressor
 
+### Comandos Úteis do Screen
+  ┌────────────────┬───────────────────────────────┐
+  │    Comando     │           Descrição           │
+  ├────────────────┼───────────────────────────────┤
+  │ screen -S nome │ Criar nova sessão             │
+  ├────────────────┼───────────────────────────────┤
+  │ screen -ls     │ Listar sessões                │
+  ├────────────────┼───────────────────────────────┤
+  │ screen -r nome │ Reconectar à sessão           │
+  ├────────────────┼───────────────────────────────┤
+  │ screen -d nome │ Forçar desanexar sessão       │
+  ├────────────────┼───────────────────────────────┤
+  │ Ctrl+A, D      │ Desanexar (dentro da sessão)  │
+  ├────────────────┼───────────────────────────────┤
+  │ Ctrl+A, K      │ Matar sessão atual            │
+  ├────────────────┼───────────────────────────────┤
+  │ exit           │ Encerrar sessão (dentro dela) │
+  └────────────────┴───────────────────────────────┘
+
 ### Quick Training (Default Parameters)
 ```bash
 docker exec datanalys_backend python manage.py train_prediction_model --no-tune
