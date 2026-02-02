@@ -91,7 +91,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        - VITE_API_URL=${VITE_API_URL:-/api/v1}
+        - VITE_API_URL=${VITE_API_URL:-/api/v1/analytics}
     container_name: datanalys_frontend
     restart: always
     expose:
@@ -109,7 +109,7 @@ services:
     container_name: datanalys_nginx
     restart: always
     ports:
-      - "80:80"
+      - "8080:80"
     volumes:
       - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
       - backend_static:/var/www/static:ro

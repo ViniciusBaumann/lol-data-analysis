@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import DashboardPage from '@/pages/DashboardPage';
 import TeamsPage from '@/pages/TeamsPage';
+import LeagueTeamsPage from '@/pages/LeagueTeamsPage';
 import TeamDetailPage from '@/pages/TeamDetailPage';
 import ComparePage from '@/pages/ComparePage';
 import DraftComparePage from '@/pages/DraftComparePage';
@@ -21,6 +22,7 @@ function App() {
           <Route path="/live" element={<LiveGamesPage />} />
           <Route path="/live/:matchId" element={<LiveGameDetailPage />} />
           <Route path="/teams" element={<TeamsPage />} />
+          <Route path="/teams/league/:leagueId" element={<LeagueTeamsPage />} />
           <Route path="/teams/:id" element={<TeamDetailPage />} />
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/draft" element={<DraftComparePage />} />
