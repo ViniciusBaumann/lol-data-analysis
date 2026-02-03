@@ -12,7 +12,7 @@ class AnalyticsConfig(AppConfig):
     verbose_name = "Analytics LoL"
 
     def ready(self):
-        """Called when Django starts. Trigger auto-update if enabled."""
+        """Called when Django starts. Trigger auto-update and scheduler if enabled."""
         # Only run in the main process (not in management commands or migrations)
         # Check RUN_MAIN to avoid running twice with auto-reloader
         if os.environ.get("RUN_MAIN") != "true":
@@ -29,6 +29,13 @@ class AnalyticsConfig(AppConfig):
         thread.start()
         logger.info("Started Oracle data auto-update background thread")
 
+        # Start the scheduler for periodic updates (01:00 and 13:00 Sao Paulo time)
+        scheduler_enabled = os.environ.get("ENABLE_SCHEDULER", "true").lower()
+        if scheduler_enabled in ("true", "1", "yes"):
+            self._start_scheduler()
+        else:
+            logger.info("Scheduler disabled (ENABLE_SCHEDULER=%s)", scheduler_enabled)
+
     def _run_auto_update(self):
         """Download and import the latest Oracle's Elixir data."""
         import time
@@ -42,3 +49,12 @@ class AnalyticsConfig(AppConfig):
             auto_update_oracle_data()
         except Exception as e:
             logger.exception("Auto-update failed: %s", e)
+
+    def _start_scheduler(self):
+        """Start the APScheduler for periodic data updates."""
+        try:
+            from analytics.scheduler import start_scheduler
+            start_scheduler()
+            logger.info("Scheduler started: updates at 01:00 and 13:00 (Sao Paulo time)")
+        except Exception as e:
+            logger.exception("Failed to start scheduler: %s", e)
