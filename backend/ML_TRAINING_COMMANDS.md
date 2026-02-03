@@ -30,18 +30,25 @@ docker exec datanalys_backend python manage.py import_oracle_data \
 ### Import All Leagues
 ```bash
 docker exec datanalys_backend python manage.py import_oracle_data \
-    --year 2025 \
-    --file data/2025_LoL_esports_match_data_from_OraclesElixir.csv \
+    --year 2026 \
+    --file data/2026_LoL_esports_match_data_from_OraclesElixir.csv \
     --all-leagues
 ```
 
 ### Download and Import (from Google Drive)
 ```bash
 docker exec datanalys_backend python manage.py import_oracle_data \
-    --year 2025 \
+    --year 2026 \
     --download \
-    --leagues HM
+    --all-leagues
 ```
+
+### Comando manual COM força de download (apaga e baixa novo)
+  docker exec datanalys_backend python manage.py import_oracle_data \
+      --year 2026 \
+      --download \
+      --all-leagues \
+      --force
 
 ## 2. Calculate ELO Ratings
 

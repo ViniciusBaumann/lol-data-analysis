@@ -165,12 +165,19 @@ class Command(BaseCommand):
             default=False,
             help="Import all leagues (skip league filtering).",
         )
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            default=False,
+            help="Force re-download by deleting cached CSV file first.",
+        )
 
     # --------------------------------------------------------------- handle
     def handle(self, *args: Any, **options: Any) -> None:
         year: int = options["year"]
         file_path: str | None = options["file"]
         download: bool = options["download"]
+        force: bool = options["force"]
 
         if not file_path and not download:
             raise CommandError(
@@ -215,7 +222,7 @@ class Command(BaseCommand):
                     target_leagues.append(alias_key)
 
         try:
-            df = self._load_csv(year, file_path, download)
+            df = self._load_csv(year, file_path, download, force)
 
             # Filter by league before processing.
             if target_leagues is not None:
@@ -263,10 +270,11 @@ class Command(BaseCommand):
         year: int,
         file_path: str | None,
         download: bool,
+        force: bool = False,
     ) -> pd.DataFrame:
         """Load the CSV into a pandas DataFrame."""
         if download:
-            df = self._download_from_gdrive(year)
+            df = self._download_from_gdrive(year, force=force)
         else:
             resolved = Path(file_path).resolve()  # type: ignore[arg-type]
             if not resolved.exists():
@@ -284,7 +292,7 @@ class Command(BaseCommand):
 
         return df
 
-    def _download_from_gdrive(self, year: int) -> pd.DataFrame:
+    def _download_from_gdrive(self, year: int, force: bool = False) -> pd.DataFrame:
         """Download only the CSV for the given year from Google Drive."""
         import gdown
 
@@ -297,11 +305,18 @@ class Command(BaseCommand):
         )
         expected_path = data_dir / expected_filename
 
+        # Delete cached file if force is True
+        if force and expected_path.exists():
+            self.stdout.write(
+                f"Force flag set. Deleting cached file: {expected_path}"
+            )
+            expected_path.unlink()
+
         # Use cached file if it already exists locally.
         if expected_path.exists():
             self.stdout.write(
                 f"Found cached file at {expected_path}, using it. "
-                f"Delete the file to force re-download."
+                f"Use --force to re-download."
             )
             df = pd.read_csv(str(expected_path), low_memory=False)
             self.stdout.write(
