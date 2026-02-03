@@ -126,6 +126,10 @@ def _download_csv(year: int, expected_path: Path) -> pd.DataFrame:
     """Download the CSV for the given year from Google Drive."""
     import gdown
 
+    # Ensure gdown cache directory exists (fixes Docker container issue)
+    gdown_cache = Path.home() / ".cache" / "gdown"
+    gdown_cache.mkdir(parents=True, exist_ok=True)
+
     # Use cached file if it exists
     if expected_path.exists():
         logger.info("Using cached CSV: %s", expected_path)

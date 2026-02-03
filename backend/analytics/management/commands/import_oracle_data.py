@@ -299,6 +299,10 @@ class Command(BaseCommand):
         data_dir = Path("data")
         data_dir.mkdir(exist_ok=True)
 
+        # Ensure gdown cache directory exists (fixes Docker container issue)
+        gdown_cache = Path.home() / ".cache" / "gdown"
+        gdown_cache.mkdir(parents=True, exist_ok=True)
+
         # Expected filename pattern from Oracle's Elixir.
         expected_filename = (
             f"{year}_LoL_esports_match_data_from_OraclesElixir.csv"
