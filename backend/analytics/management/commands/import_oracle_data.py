@@ -300,8 +300,16 @@ class Command(BaseCommand):
         data_dir.mkdir(exist_ok=True)
 
         # Ensure gdown cache directory exists (fixes Docker container issue)
-        gdown_cache = Path.home() / ".cache" / "gdown"
-        gdown_cache.mkdir(parents=True, exist_ok=True)
+        # Set HOME to /tmp if home directory is not writable
+        import os
+        original_home = os.environ.get("HOME")
+        try:
+            gdown_cache = Path.home() / ".cache" / "gdown"
+            gdown_cache.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            os.environ["HOME"] = "/tmp"
+            gdown_cache = Path("/tmp") / ".cache" / "gdown"
+            gdown_cache.mkdir(parents=True, exist_ok=True)
 
         # Expected filename pattern from Oracle's Elixir.
         expected_filename = (
