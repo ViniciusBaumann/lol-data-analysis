@@ -1770,8 +1770,13 @@ class ScheduleView(APIView):
             elif state == "completed" and series_finished:
                 actual_state = "completed"
             elif state == "completed" and not series_finished:
-                # Series not finished but marked completed - likely between games
-                actual_state = "inProgress"
+                # Series not finished but marked completed
+                if team1_wins == 0 and team2_wins == 0:
+                    # No games played yet - treat as upcoming
+                    actual_state = "unstarted"
+                else:
+                    # Between games in the series
+                    actual_state = "inProgress"
             else:
                 actual_state = state
 
