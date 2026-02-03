@@ -190,6 +190,7 @@ interface TeamSelectorProps {
   onSelect: (team: Team) => void;
   onClear: () => void;
   accentColor: 'blue' | 'red';
+  excludeTeamId?: number | null;
 }
 
 function TeamSelector({
@@ -198,6 +199,7 @@ function TeamSelector({
   onSelect,
   onClear,
   accentColor,
+  excludeTeamId,
 }: TeamSelectorProps) {
   const [search, setSearch] = useState('');
   const [teams, setTeams] = useState<Team[]>([]);
@@ -319,13 +321,16 @@ function TeamSelector({
               Buscando...
             </div>
           )}
-          {!loading && teams.length === 0 && (
-            <div className="p-3 text-sm text-muted-foreground text-center">
-              Nenhum time encontrado.
-            </div>
-          )}
-          {!loading &&
-            teams.map((team) => (
+          {!loading && (() => {
+            const filteredTeams = teams.filter((team) => excludeTeamId == null || team.id !== excludeTeamId);
+            if (filteredTeams.length === 0) {
+              return (
+                <div className="p-3 text-sm text-muted-foreground text-center">
+                  Nenhum time encontrado.
+                </div>
+              );
+            }
+            return filteredTeams.map((team) => (
               <button
                 key={team.id}
                 onClick={() => {
@@ -343,7 +348,8 @@ function TeamSelector({
                   {team.win_rate.toFixed(1)}% WR
                 </p>
               </button>
-            ))}
+            ));
+          })()}
         </div>
       )}
     </div>
@@ -919,6 +925,7 @@ export default function ComparePage() {
           onSelect={setTeam1}
           onClear={() => setTeam1(null)}
           accentColor="blue"
+          excludeTeamId={team2?.id}
         />
 
         <div className="flex items-center justify-center md:mt-8">
@@ -940,6 +947,7 @@ export default function ComparePage() {
           onSelect={setTeam2}
           onClear={() => setTeam2(null)}
           accentColor="red"
+          excludeTeamId={team1?.id}
         />
       </div>
 
