@@ -21,7 +21,9 @@ db.sqlite3-journal
 media/
 staticfiles/
 backend/data/*.csv
-
+backend/ml_models/*.json                                                                             
+backend/ml_models/*.pkl                                                                              
+backend/ml_models/*.joblib 
 # ========================
 # Node / React (frontend)
 # ========================

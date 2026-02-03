@@ -363,6 +363,8 @@ function MatchPredictionPanelComponent({
                   {teamContext.blue_team.stats && teamContext.red_team.stats && (() => {
                     const blueGold = teamContext.blue_team.stats.avg_golddiffat15;
                     const redGold = teamContext.red_team.stats.avg_golddiffat15;
+                    // Hide when both are 0 (indicates no data available)
+                    if (blueGold === 0 && redGold === 0) return null;
                     const goldDiff = blueGold - redGold;
                     const goldColor = goldDiff > 0 ? 'text-blue-400' : goldDiff < 0 ? 'text-red-400' : 'text-zinc-400';
                     return (
