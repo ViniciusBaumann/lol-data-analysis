@@ -20,9 +20,6 @@ db.sqlite3-journal
 *.log
 media/
 staticfiles/
-backend/ml_models/*.json
-backend/ml_models/*.pkl
-backend/ml_models/*.joblib
 backend/data/*.csv
 
 # ========================
