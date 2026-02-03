@@ -401,6 +401,9 @@ export interface CompositionScores {
   poke: number;
   engage: number;
   pick: number;
+  siege: number;
+  ap_count: number;
+  ad_count: number;
 }
 
 export interface CompositionAnalysis {

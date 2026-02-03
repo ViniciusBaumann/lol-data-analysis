@@ -80,14 +80,40 @@ const COMP_TYPES: { key: keyof CompositionScores; label: string; icon: string }[
   { key: 'poke', label: 'Poke', icon: '🎯' },
   { key: 'engage', label: 'Engage', icon: '🚀' },
   { key: 'pick', label: 'Pick', icon: '🎣' },
+  { key: 'siege', label: 'Siege', icon: '🏰' },
 ];
 
 function getTopCompTypes(scores: CompositionScores, threshold: number = 0.4): { key: keyof CompositionScores; value: number }[] {
-  return COMP_TYPES
+  const results = COMP_TYPES
     .map(t => ({ key: t.key, value: scores[t.key] }))
-    .filter(t => t.value >= threshold)
+    .filter(t => {
+      // Siege: show if at least 1 champion (score > 0)
+      if (t.key === 'siege') return t.value > 0;
+      return t.value >= threshold;
+    })
     .sort((a, b) => b.value - a.value)
-    .slice(0, 3);
+    .slice(0, 4); // Allow up to 4 tags to accommodate siege
+  return results;
+}
+
+function getDamageWarning(scores: CompositionScores): { type: 'heavy_ap' | 'heavy_ad' | 'low_damage' | null; label: string; icon: string } | null {
+  const apCount = scores.ap_count ?? 0;
+  const adCount = scores.ad_count ?? 0;
+  const totalDamage = apCount + adCount;
+
+  // Heavy AP: 4+ AP damage dealers
+  if (apCount >= 4) {
+    return { type: 'heavy_ap', label: 'Full AP', icon: '🔮' };
+  }
+  // Heavy AD: 4+ AD damage dealers
+  if (adCount >= 4) {
+    return { type: 'heavy_ad', label: 'Full AD', icon: '⚔️' };
+  }
+  // Low damage: 0-1 damage dealers identified
+  if (totalDamage <= 1) {
+    return { type: 'low_damage', label: 'Low DMG', icon: '⚠️' };
+  }
+  return null;
 }
 
 function MatchPredictionPanelComponent({
@@ -238,7 +264,22 @@ function MatchPredictionPanelComponent({
                     </span>
                   );
                 })}
-                {getTopCompTypes(composition.blue).length === 0 && (
+                {(() => {
+                  const warning = getDamageWarning(composition.blue);
+                  if (warning) {
+                    return (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
+                        title={warning.type === 'heavy_ap' ? 'Dano muito concentrado em AP' : warning.type === 'heavy_ad' ? 'Dano muito concentrado em AD' : 'Poucos dealers de dano identificados'}
+                      >
+                        <span>{warning.icon}</span>
+                        <span>{warning.label}</span>
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
+                {getTopCompTypes(composition.blue).length === 0 && !getDamageWarning(composition.blue) && (
                   <span className="text-[10px] text-zinc-500">Comp balanceada</span>
                 )}
               </div>
@@ -266,7 +307,22 @@ function MatchPredictionPanelComponent({
                     </span>
                   );
                 })}
-                {getTopCompTypes(composition.red).length === 0 && (
+                {(() => {
+                  const warning = getDamageWarning(composition.red);
+                  if (warning) {
+                    return (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
+                        title={warning.type === 'heavy_ap' ? 'Dano muito concentrado em AP' : warning.type === 'heavy_ad' ? 'Dano muito concentrado em AD' : 'Poucos dealers de dano identificados'}
+                      >
+                        <span>{warning.icon}</span>
+                        <span>{warning.label}</span>
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
+                {getTopCompTypes(composition.red).length === 0 && !getDamageWarning(composition.red) && (
                   <span className="text-[10px] text-zinc-500">Comp balanceada</span>
                 )}
               </div>

@@ -363,6 +363,7 @@ def compute_team_comp_features(
         f"{prefix}comp_poke": tag_counts.get("poke", 0) / 5.0,
         f"{prefix}comp_engage": tag_counts.get("engage", 0) / 5.0,
         f"{prefix}comp_pick": tag_counts.get("pick", 0) / 5.0,
+        f"{prefix}comp_siege": tag_counts.get("siege", 0) / 5.0,
 
         # Damage type balance
         f"{prefix}comp_ap_count": sum(1 for pos, tags in position_tags.items() if "ap" in tags),

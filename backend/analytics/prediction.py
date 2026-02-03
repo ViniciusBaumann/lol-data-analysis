@@ -1384,6 +1384,9 @@ def predict_draft(
             "poke": round(blue_comp_features.get("blue_comp_poke", 0), 2),
             "engage": round(blue_comp_features.get("blue_comp_engage", 0), 2),
             "pick": round(blue_comp_features.get("blue_comp_pick", 0), 2),
+            "siege": round(blue_comp_features.get("blue_comp_siege", 0), 2),
+            "ap_count": int(blue_comp_features.get("blue_comp_ap_count", 0)),
+            "ad_count": int(blue_comp_features.get("blue_comp_ad_count", 0)),
         },
         "red": {
             "early_game": round(red_comp_features.get("red_comp_early_game", 0), 2),
@@ -1393,6 +1396,9 @@ def predict_draft(
             "poke": round(red_comp_features.get("red_comp_poke", 0), 2),
             "engage": round(red_comp_features.get("red_comp_engage", 0), 2),
             "pick": round(red_comp_features.get("red_comp_pick", 0), 2),
+            "siege": round(red_comp_features.get("red_comp_siege", 0), 2),
+            "ap_count": int(red_comp_features.get("red_comp_ap_count", 0)),
+            "ad_count": int(red_comp_features.get("red_comp_ad_count", 0)),
         },
     }
 
