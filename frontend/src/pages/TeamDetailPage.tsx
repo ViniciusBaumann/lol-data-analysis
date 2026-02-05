@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Target,
@@ -540,6 +540,8 @@ function HistoryTab({
   totalPages: number;
   onPageChange: (p: number) => void;
 }) {
+  const navigate = useNavigate();
+
   return (
     <div className="space-y-4">
       <FilterBar filters={filters} onChange={onFilterChange} />
@@ -583,18 +585,16 @@ function HistoryTab({
                   return (
                     <tr
                       key={match.id}
-                      className="border-b border-border/50 hover:bg-secondary/50 transition-colors"
+                      onClick={() => navigate(`/matches/${match.id}`)}
+                      className="border-b border-border/50 hover:bg-secondary/50 transition-colors cursor-pointer"
                     >
                       <td className="py-3 px-3 text-muted-foreground">
                         {formatDate(match.date)}
                       </td>
                       <td className="py-3 px-3">
-                        <Link
-                          to={`/matches/${match.id}`}
-                          className="font-medium text-foreground hover:text-primary transition-colors"
-                        >
+                        <span className="font-medium text-foreground">
                           {opponent.name}
-                        </Link>
+                        </span>
                       </td>
                       <td className="py-3 px-3 text-center">
                         <span

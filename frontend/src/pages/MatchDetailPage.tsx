@@ -350,7 +350,7 @@ export default function MatchDetailPage() {
             <h3 className="text-sm font-medium text-muted-foreground mb-3 text-center">
               Primeiros Objetivos
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 {
                   label: 'Blood',
@@ -363,14 +363,9 @@ export default function MatchDetailPage() {
                   red: redTeamStats.first_dragon,
                 },
                 {
-                  label: 'Herald',
-                  blue: blueTeamStats.first_herald,
-                  red: redTeamStats.first_herald,
-                },
-                {
                   label: 'Baron',
-                  blue: blueTeamStats.first_baron,
-                  red: redTeamStats.first_baron,
+                  blue: blueTeamStats.first_baron === true,
+                  red: redTeamStats.first_baron === true,
                 },
                 {
                   label: 'Tower',

@@ -1,13 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Swords, GitCompare, Crosshair, Shield, Radio, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, GitCompare, Crosshair, Shield, Radio, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/live', label: 'Ao Vivo', icon: Radio },
-  { path: '/teams', label: 'Times', icon: Users },
-  { path: '/matches', label: 'Partidas', icon: Swords },
+  { path: '/teams', label: 'Ligas', icon: Users },
   { path: '/compare', label: 'Comparar', icon: GitCompare },
   { path: '/draft', label: 'Draft', icon: Crosshair },
   { path: '/matchups', label: 'Matchups', icon: Shield },
