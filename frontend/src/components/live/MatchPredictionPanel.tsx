@@ -109,11 +109,11 @@ function getDamageWarning(scores: CompositionScores): { type: 'heavy_ap' | 'heav
   if (adCount >= 4) {
     return { type: 'heavy_ad', label: 'Full AD', icon: '⚔️' };
   }
-  // Low damage: 0-1 damage dealers identified
-  if (totalDamage <= 1) {
-    return { type: 'low_damage', label: 'Low DMG', icon: '⚠️' };
-  }
   return null;
+}
+
+function hasNoEngage(scores: CompositionScores): boolean {
+  return (scores.engage ?? 0) < 0.1;
 }
 
 function MatchPredictionPanelComponent({
@@ -270,7 +270,7 @@ function MatchPredictionPanelComponent({
                     return (
                       <span
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
-                        title={warning.type === 'heavy_ap' ? 'Dano muito concentrado em AP' : warning.type === 'heavy_ad' ? 'Dano muito concentrado em AD' : 'Poucos dealers de dano identificados'}
+                        title={warning.type === 'heavy_ap' ? 'Dano muito concentrado em AP' : 'Dano muito concentrado em AD'}
                       >
                         <span>{warning.icon}</span>
                         <span>{warning.label}</span>
@@ -279,7 +279,16 @@ function MatchPredictionPanelComponent({
                   }
                   return null;
                 })()}
-                {getTopCompTypes(composition.blue).length === 0 && !getDamageWarning(composition.blue) && (
+                {hasNoEngage(composition.blue) && (
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
+                    title="Time sem engage confiavel"
+                  >
+                    <span>🚫</span>
+                    <span>Sem Engage</span>
+                  </span>
+                )}
+                {getTopCompTypes(composition.blue).length === 0 && !getDamageWarning(composition.blue) && !hasNoEngage(composition.blue) && (
                   <span className="text-[10px] text-zinc-500">Comp balanceada</span>
                 )}
               </div>
@@ -313,7 +322,7 @@ function MatchPredictionPanelComponent({
                     return (
                       <span
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
-                        title={warning.type === 'heavy_ap' ? 'Dano muito concentrado em AP' : warning.type === 'heavy_ad' ? 'Dano muito concentrado em AD' : 'Poucos dealers de dano identificados'}
+                        title={warning.type === 'heavy_ap' ? 'Dano muito concentrado em AP' : 'Dano muito concentrado em AD'}
                       >
                         <span>{warning.icon}</span>
                         <span>{warning.label}</span>
@@ -322,7 +331,16 @@ function MatchPredictionPanelComponent({
                   }
                   return null;
                 })()}
-                {getTopCompTypes(composition.red).length === 0 && !getDamageWarning(composition.red) && (
+                {hasNoEngage(composition.red) && (
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
+                    title="Time sem engage confiavel"
+                  >
+                    <span>🚫</span>
+                    <span>Sem Engage</span>
+                  </span>
+                )}
+                {getTopCompTypes(composition.red).length === 0 && !getDamageWarning(composition.red) && !hasNoEngage(composition.red) && (
                   <span className="text-[10px] text-zinc-500">Comp balanceada</span>
                 )}
               </div>
