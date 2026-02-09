@@ -1914,25 +1914,29 @@ def get_live_match_data(match_id: str) -> dict | None:
         except Exception:
             logger.exception("enrichment failed for match %s", match_id)
 
-    # Build series games info
+    # Build series games info (with draft/stats for completed games)
     strategy = match_data.get("strategy", {})
     series_games = None
     if len(all_games) > 1:
-        series_games = []
-        for g in all_games:
-            if g.get("state") == "unneeded":
-                continue
-            g_teams = g.get("teams", [])
-            blue_g = next((gt for gt in g_teams if (gt.get("side") or "").lower() == "blue"), None)
-            red_g = next((gt for gt in g_teams if (gt.get("side") or "").lower() == "red"), None)
-            series_games.append({
-                "game_id": g.get("id"),
-                "game_number": g.get("number"),
-                "state": g.get("state"),
-                "blue_team_id": str(blue_g.get("id", "")) if blue_g else None,
-                "red_team_id": str(red_g.get("id", "")) if red_g else None,
-                "vod": g.get("vods", [{}])[0].get("parameter") if g.get("vods") else None,
-            })
+        # Build team_id_map so _build_series_games can resolve team names
+        team_id_map: dict[str, dict] = {}
+        for t in teams_raw:
+            tid = t.get("id")
+            if tid is not None:
+                team_id_map[str(tid)] = {
+                    "code": t.get("code", ""),
+                    "name": t.get("name", ""),
+                    "image": t.get("image", ""),
+                }
+
+        series_games = _build_series_games(all_games, team_id_map, current_game_id)
+
+        # Inject current game draft into its series entry
+        if series_games and draft:
+            for sg in series_games:
+                if sg.get("is_current"):
+                    sg["draft"] = draft
+                    break
 
     # Check if stats are enabled for this league
     stats_enabled = any(
