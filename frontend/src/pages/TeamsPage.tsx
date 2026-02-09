@@ -1,9 +1,12 @@
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
   Trophy,
   MapPin,
   ChevronRight,
+  Search,
+  Calendar,
 } from 'lucide-react';
 import { useLeagues } from '@/hooks/useLeagues';
 import { Loading } from '@/components/common/Loading';
@@ -34,9 +37,24 @@ function getRegionAccent(region: string): string {
   return REGION_ACCENT[region] || 'text-primary';
 }
 
+const currentYear = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from({ length: currentYear - 2019 }, (_, i) => currentYear - i);
+
 export default function TeamsPage() {
   const navigate = useNavigate();
-  const { data: leagues, loading } = useLeagues({ year: 2026 });
+  const [year, setYear] = useState(currentYear);
+  const { data: leagues, loading } = useLeagues({ year });
+  const [search, setSearch] = useState('');
+
+  const filteredLeagues = useMemo(() => {
+    if (!search.trim()) return leagues;
+    const q = search.toLowerCase();
+    return leagues.filter(
+      (l) =>
+        l.name.toLowerCase().includes(q) ||
+        l.region.toLowerCase().includes(q),
+    );
+  }, [leagues, search]);
 
   return (
     <div className="space-y-6">
@@ -51,18 +69,54 @@ export default function TeamsPage() {
         </div>
       </div>
 
+      {/* Filters */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar liga ou região..."
+            className="w-full pl-9 pr-4 py-2 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-colors"
+          />
+        </div>
+        <div className="relative">
+          <Calendar
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+          />
+          <select
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="pl-9 pr-8 py-2 bg-card border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-colors appearance-none cursor-pointer"
+          >
+            {YEAR_OPTIONS.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* Content */}
       {loading && <Loading />}
 
-      {!loading && leagues.length === 0 && (
+      {!loading && filteredLeagues.length === 0 && (
         <div className="text-center py-12 text-muted-foreground">
-          Nenhuma liga encontrada.
+          {search.trim()
+            ? `Nenhuma liga encontrada para "${search}".`
+            : 'Nenhuma liga encontrada.'}
         </div>
       )}
 
-      {!loading && leagues.length > 0 && (
+      {!loading && filteredLeagues.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {leagues.map((league) => (
+          {filteredLeagues.map((league) => (
             <div
               key={league.id}
               onClick={() => navigate(`/teams/league/${league.id}`)}
