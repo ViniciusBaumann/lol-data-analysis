@@ -12,6 +12,7 @@ import LeagueMatchesPage from '@/pages/LeagueMatchesPage';
 import MatchDetailPage from '@/pages/MatchDetailPage';
 import LiveGamesPage from '@/pages/LiveGamesPage';
 import LiveGameDetailPage from '@/pages/LiveGameDetailPage';
+import SettingsPage from '@/pages/SettingsPage';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
           <Route path="/matches" element={<MatchesPage />} />
           <Route path="/matches/league/:leagueId" element={<LeagueMatchesPage />} />
           <Route path="/matches/:id" element={<MatchDetailPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
