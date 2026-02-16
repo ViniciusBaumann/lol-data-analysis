@@ -196,7 +196,7 @@ function MatchPredictionPanelComponent({
           </div>
 
           {/* Win Probability Center */}
-          <div className="flex flex-col items-center px-4">
+          <div className="flex flex-col items-center px-4 min-w-[160px]">
             {hasPredictions ? (
               <>
                 <div className="flex items-center gap-3 mb-1">
@@ -209,9 +209,14 @@ function MatchPredictionPanelComponent({
                   </span>
                 </div>
                 {hasComparison && Math.abs(draftDiff) >= 1 && (
-                  <p className="text-[10px] text-zinc-500">
-                    Draft: {draftDiff > 0 ? '+' : ''}{draftDiff.toFixed(1)}% para {draftDiff > 0 ? 'Blue' : 'Red'}
-                  </p>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700">
+                    <Swords size={10} className={draftDiff > 0 ? 'text-blue-400' : 'text-red-400'} />
+                    <span className="text-[10px] text-zinc-500">Base {teamOnlyBlueProb.toFixed(0)}%</span>
+                    <span className={`text-[11px] font-bold ${draftDiff > 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                      {draftDiff > 0 ? '+' : ''}{draftDiff.toFixed(1)}%
+                    </span>
+                    <span className="text-[10px] text-zinc-500">draft</span>
+                  </div>
                 )}
               </>
             ) : (
@@ -351,15 +356,29 @@ function MatchPredictionPanelComponent({
         {/* Win Probability Bar or Unavailable Message */}
         {hasPredictions ? (
           <>
-            <div className="h-3 rounded-full overflow-hidden flex bg-zinc-800">
-              <div
-                className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-500"
-                style={{ width: `${predictions.blue_win_prob}%` }}
-              />
-              <div
-                className="h-full bg-gradient-to-r from-red-400 to-red-600 transition-all duration-500"
-                style={{ width: `${predictions.red_win_prob}%` }}
-              />
+            <div className="relative">
+              <div className="h-3 rounded-full overflow-hidden flex bg-zinc-800">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-500"
+                  style={{ width: `${predictions.blue_win_prob}%` }}
+                />
+                <div
+                  className="h-full bg-gradient-to-r from-red-400 to-red-600 transition-all duration-500"
+                  style={{ width: `${predictions.red_win_prob}%` }}
+                />
+              </div>
+              {/* Team-only prediction marker (shows draft shift on the bar) */}
+              {hasComparison && Math.abs(draftDiff) >= 1 && (
+                <div
+                  className="absolute top-0 h-full flex flex-col items-center pointer-events-none transition-all duration-500"
+                  style={{ left: `${teamOnlyBlueProb}%` }}
+                >
+                  <div className="w-0.5 h-full bg-zinc-400/60" />
+                  <span className="text-[9px] text-zinc-500 mt-0.5 whitespace-nowrap">
+                    sem draft {teamOnlyBlueProb.toFixed(0)}%
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Key Factors - Fatores Decisivos */}
