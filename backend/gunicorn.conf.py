@@ -19,7 +19,8 @@ max_requests = 1000
 max_requests_jitter = 50
 
 # Timeout settings
-timeout = 120
+# Import endpoint can download + process large CSVs; 300s avoids premature kill
+timeout = 300
 graceful_timeout = 30
 keepalive = 5
 

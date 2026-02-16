@@ -1147,7 +1147,7 @@ class ImportView(APIView):
             download = download.lower() in ("true", "1", "yes")
 
         try:
-            call_command("import_oracle_data", year=year, download=download)
+            call_command("import_oracle_data", year=year, download=download, force=True)
         except Exception as e:
             return Response(
                 {"error": f"Import failed: {str(e)}"},

@@ -13,10 +13,26 @@ class AnalyticsConfig(AppConfig):
 
     def ready(self):
         """Called when Django starts. Trigger auto-update and scheduler if enabled."""
-        # Only run in the main process (not in management commands or migrations)
-        # Check RUN_MAIN to avoid running twice with auto-reloader
-        if os.environ.get("RUN_MAIN") != "true":
-            return
+        import sys
+
+        # Detect whether we are being invoked via ``manage.py``
+        is_manage = len(sys.argv) > 0 and os.path.basename(sys.argv[0]) == "manage.py"
+
+        if is_manage:
+            command = sys.argv[1] if len(sys.argv) > 1 else ""
+            if command == "runserver":
+                # Django dev server uses an auto-reloader that starts two
+                # processes.  RUN_MAIN is set in the *child* (reloaded)
+                # process — skip the watcher to avoid running twice.
+                if os.environ.get("RUN_MAIN") != "true":
+                    return
+            else:
+                # Other management commands (migrate, shell, etc.) — skip.
+                return
+
+        # For production servers (Gunicorn, uWSGI, …) we always proceed.
+        # With Gunicorn's preload_app=True, ready() is called once in the
+        # master process, which is exactly what we want for the scheduler.
 
         # Check if auto-update is enabled (default: enabled)
         auto_update = os.environ.get("AUTO_UPDATE_ORACLE_DATA", "true").lower()
