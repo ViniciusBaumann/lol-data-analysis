@@ -398,28 +398,44 @@ export function GameScoreboard({ game, ddragonVersion }: GameScoreboardProps) {
       </div>
 
       {/* Stats bar */}
-      {hasStats && (
-        <div className="flex items-center justify-between px-6 py-3 bg-zinc-900/80 border-b border-zinc-800">
-          <TeamStatsBar
-            kills={stats.blue_kills}
-            gold={stats.blue_gold}
-            towers={stats.blue_towers}
-            dragons={stats.blue_dragons}
-            barons={stats.blue_barons}
-            inhibitors={stats.blue_inhibitors}
-            side="blue"
-          />
-          <TeamStatsBar
-            kills={stats.red_kills}
-            gold={stats.red_gold}
-            towers={stats.red_towers}
-            dragons={stats.red_dragons}
-            barons={stats.red_barons}
-            inhibitors={stats.red_inhibitors}
-            side="red"
-          />
-        </div>
-      )}
+      {hasStats && (() => {
+        const goldDiff = stats.blue_gold - stats.red_gold;
+        const absGoldDiff = Math.abs(goldDiff);
+        return (
+          <div className="flex items-center justify-between px-6 py-3 bg-zinc-900/80 border-b border-zinc-800">
+            <TeamStatsBar
+              kills={stats.blue_kills}
+              gold={stats.blue_gold}
+              towers={stats.blue_towers}
+              dragons={stats.blue_dragons}
+              barons={stats.blue_barons}
+              inhibitors={stats.blue_inhibitors}
+              side="blue"
+            />
+            {/* Gold Diff center */}
+            <div className="flex flex-col items-center px-3 shrink-0">
+              <Coins size={14} className="text-yellow-500 mb-0.5" />
+              <span
+                className={cn(
+                  'text-sm font-bold tabular-nums whitespace-nowrap',
+                  goldDiff > 0 ? 'text-blue-400' : goldDiff < 0 ? 'text-red-400' : 'text-zinc-500',
+                )}
+              >
+                {goldDiff > 0 ? `+${absGoldDiff.toLocaleString()}` : goldDiff < 0 ? `-${absGoldDiff.toLocaleString()}` : '0'}
+              </span>
+            </div>
+            <TeamStatsBar
+              kills={stats.red_kills}
+              gold={stats.red_gold}
+              towers={stats.red_towers}
+              dragons={stats.red_dragons}
+              barons={stats.red_barons}
+              inhibitors={stats.red_inhibitors}
+              side="red"
+            />
+          </div>
+        );
+      })()}
 
       {/* Player table */}
       {hasPlayers && (

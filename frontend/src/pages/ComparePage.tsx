@@ -1217,6 +1217,9 @@ export default function ComparePage() {
                               const r2 = m2
                                 ? getMatchValue(m2 as unknown as Record<string, unknown>, currentTab)
                                 : null;
+                              const d1 = m1?.date ? new Date(m1.date) : null;
+                              const d2 = m2?.date ? new Date(m2.date) : null;
+                              const fmtDate = (d: Date) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
                               return (
                                 <div
                                   key={i}
@@ -1226,7 +1229,12 @@ export default function ComparePage() {
                                   <div className="flex items-center gap-1 min-w-0">
                                     {r1 ? (
                                       <>
-                                        {/* Side badge - left */}
+                                        {d1 && (
+                                          <span className="text-[9px] text-muted-foreground/60 shrink-0 tabular-nums">
+                                            {fmtDate(d1)}
+                                          </span>
+                                        )}
+                                        {/* Side badge */}
                                         <span className={cn(
                                           'text-[8px] font-bold px-1.5 py-0.5 rounded shrink-0',
                                           m1!.side === 'Blue'
@@ -1266,7 +1274,12 @@ export default function ComparePage() {
                                   <div className="flex items-center gap-1 min-w-0">
                                     {r2 ? (
                                       <>
-                                        {/* Side badge - left */}
+                                        {d2 && (
+                                          <span className="text-[9px] text-muted-foreground/60 shrink-0 tabular-nums">
+                                            {fmtDate(d2)}
+                                          </span>
+                                        )}
+                                        {/* Side badge */}
                                         <span className={cn(
                                           'text-[8px] font-bold px-1.5 py-0.5 rounded shrink-0',
                                           m2!.side === 'Blue'
