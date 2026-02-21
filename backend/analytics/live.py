@@ -3,6 +3,7 @@ champion picks and live stats via livestats, maps champion IDs to names via
 Data Dragon, matches teams to the local DB, and runs draft predictions."""
 
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 
@@ -35,6 +36,106 @@ _live_game_state_cache: dict[str, dict] = {}
 # Cache for game start timestamps (first frame timestamp for accurate game time)
 # Key: game_id, Value: {"first_timestamp": str, "fetched_at": datetime}
 _game_start_cache: dict[str, dict] = {}
+
+# Throttle: track last snapshot save time per game_id to avoid excessive DB writes
+_snapshot_last_saved: dict[str, datetime] = {}
+_SNAPSHOT_SAVE_INTERVAL = 15  # seconds between saves for the same game
+
+# PandaScore API integration (fallback for completed game data)
+PANDASCORE_API_KEY = os.environ.get("PANDA_SCORE_API_KEY", "")
+PANDASCORE_BASE_URL = "https://api.pandascore.co"
+_pandascore_cache: dict = {"data": None, "timestamp": None}
+_PANDASCORE_CACHE_TTL = 30  # seconds
+
+
+def _has_real_stats(stats: dict | None) -> bool:
+    """Check if a live_stats/final_stats dict has non-trivial data."""
+    if not stats:
+        return False
+    return (
+        stats.get("blue_kills", 0) > 0
+        or stats.get("red_kills", 0) > 0
+        or stats.get("blue_gold", 0) > 0
+        or stats.get("red_gold", 0) > 0
+        or stats.get("blue_towers", 0) > 0
+        or stats.get("red_towers", 0) > 0
+    )
+
+
+def _save_live_snapshot(
+    game_id: str,
+    draft: dict | None,
+    stats: dict | None,
+    players: dict | None,
+    blue_team_code: str = "",
+    red_team_code: str = "",
+    blue_team_name: str = "",
+    red_team_name: str = "",
+    blue_db_id: int | None = None,
+    red_db_id: int | None = None,
+    match_date: datetime | None = None,
+    force: bool = False,
+) -> None:
+    """Save or update a live game snapshot to the database.
+
+    Called during live polling to preserve the latest game state.
+    When the game completes, this snapshot serves as fallback data
+    since the Livestats API stops returning real data.
+
+    Throttled to avoid excessive DB writes (max once per SNAPSHOT_SAVE_INTERVAL).
+    """
+    from .models import LiveMatchSnapshot
+
+    if not game_id or not _has_real_stats(stats):
+        return
+
+    # Throttle: skip if we saved recently for this game
+    now = datetime.now(timezone.utc)
+    if not force:
+        last_saved = _snapshot_last_saved.get(game_id)
+        if last_saved and (now - last_saved).total_seconds() < _SNAPSHOT_SAVE_INTERVAL:
+            return
+
+    try:
+        LiveMatchSnapshot.objects.update_or_create(
+            esports_game_id=game_id,
+            defaults={
+                "blue_team_code": blue_team_code,
+                "red_team_code": red_team_code,
+                "blue_team_name": blue_team_name,
+                "red_team_name": red_team_name,
+                "blue_team_db_id": blue_db_id,
+                "red_team_db_id": red_db_id,
+                "match_date": match_date or now,
+                "draft_data": draft,
+                "final_stats": stats,
+                "players_data": players,
+            },
+        )
+        _snapshot_last_saved[game_id] = now
+        logger.debug("Saved live snapshot for game %s", game_id)
+    except Exception:
+        logger.exception("Failed to save live snapshot for game %s", game_id)
+
+
+def _load_live_snapshot(game_id: str) -> dict | None:
+    """Load a saved snapshot from the database.
+
+    Returns dict with keys: draft, final_stats, players, or None if not found.
+    """
+    from .models import LiveMatchSnapshot
+
+    try:
+        snap = LiveMatchSnapshot.objects.filter(esports_game_id=game_id).first()
+        if snap and snap.final_stats:
+            return {
+                "draft": snap.draft_data,
+                "final_stats": snap.final_stats,
+                "players": snap.players_data,
+            }
+    except Exception:
+        logger.exception("Failed to load snapshot for game %s", game_id)
+    return None
 
 
 def _get_http_session() -> http_requests.Session:
@@ -153,12 +254,17 @@ def _resolve_champion_key(champion_id) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _get_starting_time() -> str:
-    """ISO-8601 timestamp rounded to 10s, minus 60s for livestats startingTime."""
+def _get_starting_time(offset_seconds: int = 90) -> str:
+    """ISO-8601 timestamp rounded to 10s, minus offset for livestats startingTime.
+
+    The Livestats API rejects windows whose end is < 20s in the past.
+    A 10s-aligned window spans [T, T+10s], so we need T+10s to be at least
+    20s before now.  Using 90s (default) gives a comfortable margin.
+    """
     now = datetime.now(timezone.utc)
     seconds = now.second - (now.second % 10)
     rounded = now.replace(second=seconds, microsecond=0)
-    starting = rounded - timedelta(seconds=60)
+    starting = rounded - timedelta(seconds=offset_seconds)
     return starting.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
@@ -424,21 +530,26 @@ def _get_game_start_timestamp(game_id: str) -> str | None:
 def _fetch_window(game_id: str) -> dict | None:
     """Fetch livestats window with startingTime for latest data.
 
-    Uses startingTime to get the most recent frames (last ~60s of game data).
+    Uses startingTime to get the most recent frames (last ~90s of game data).
     For game time calculation, we use _get_game_start_timestamp separately.
+    The API rejects windows whose end is < 20s old, so we retry with larger
+    offsets on 400 errors.
     """
     try:
         session = _get_http_session()
-        resp = session.get(
-            f"{LIVESTATS_BASE_URL}/window/{game_id}",
-            params={"startingTime": _get_starting_time()},
-            timeout=8,
-        )
-        if resp.status_code == 200 and resp.text.strip():
-            data = resp.json()
-            # If we got gameMetadata, return it
-            if data.get("gameMetadata"):
-                return data
+        # Try with increasing offsets (90s, 150s, 300s) to handle timing edge cases
+        for offset in (90, 150, 300):
+            resp = session.get(
+                f"{LIVESTATS_BASE_URL}/window/{game_id}",
+                params={"startingTime": _get_starting_time(offset)},
+                timeout=8,
+            )
+            if resp.status_code == 200 and resp.text.strip():
+                data = resp.json()
+                if data.get("gameMetadata"):
+                    return data
+            elif resp.status_code != 400:
+                break  # Non-400 error, stop retrying
         # Fallback: no startingTime (for very new games)
         resp = session.get(
             f"{LIVESTATS_BASE_URL}/window/{game_id}",
@@ -456,15 +567,18 @@ def _fetch_window(game_id: str) -> dict | None:
 def _fetch_details(game_id: str) -> dict | None:
     try:
         session = _get_http_session()
-        resp = session.get(
-            f"{LIVESTATS_BASE_URL}/details/{game_id}",
-            params={"startingTime": _get_starting_time()},
-            timeout=8,
-        )
-        if resp.status_code == 200 and resp.text.strip():
-            data = resp.json()
-            if data.get("frames"):
-                return data
+        for offset in (90, 150, 300):
+            resp = session.get(
+                f"{LIVESTATS_BASE_URL}/details/{game_id}",
+                params={"startingTime": _get_starting_time(offset)},
+                timeout=8,
+            )
+            if resp.status_code == 200 and resp.text.strip():
+                data = resp.json()
+                if data.get("frames"):
+                    return data
+            elif resp.status_code != 400:
+                break
         resp = session.get(
             f"{LIVESTATS_BASE_URL}/details/{game_id}",
             timeout=8,
@@ -950,6 +1064,202 @@ def match_team_to_db(team_code: str, team_name: str) -> int | None:
 
 
 # ---------------------------------------------------------------------------
+# PandaScore fallback for completed game data
+# ---------------------------------------------------------------------------
+
+
+def _fetch_pandascore_matches() -> list[dict]:
+    """Fetch running + recent past matches from PandaScore (cached)."""
+    if not PANDASCORE_API_KEY:
+        return []
+
+    now = datetime.now(timezone.utc)
+    cached = _pandascore_cache.get("data")
+    ts = _pandascore_cache.get("timestamp")
+    if cached is not None and ts and (now - ts).total_seconds() < _PANDASCORE_CACHE_TTL:
+        return cached
+
+    headers = {"Authorization": f"Bearer {PANDASCORE_API_KEY}"}
+    combined: list[dict] = []
+
+    try:
+        # Fetch running matches
+        resp = http_requests.get(
+            f"{PANDASCORE_BASE_URL}/lol/matches/running",
+            headers=headers,
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            combined.extend(resp.json())
+
+        # Fetch recent past matches (covers just-finished matches)
+        resp2 = http_requests.get(
+            f"{PANDASCORE_BASE_URL}/lol/matches/past",
+            headers=headers,
+            params={"page[size]": 10, "sort": "-scheduled_at"},
+            timeout=10,
+        )
+        if resp2.status_code == 200:
+            # Deduplicate by match id
+            existing_ids = {m["id"] for m in combined}
+            for m in resp2.json():
+                if m["id"] not in existing_ids:
+                    combined.append(m)
+
+        _pandascore_cache["data"] = combined
+        _pandascore_cache["timestamp"] = now
+        return combined
+
+    except Exception:
+        logger.exception("PandaScore fetch failed")
+
+    return cached if cached else []
+
+
+def _match_code_to_ps_opponent(code: str, opponents: list[dict]) -> dict | None:
+    """Match a LoL Esports team code to a PandaScore opponent entry.
+
+    Tries: exact acronym match, then alias-based name matching.
+    Returns the PandaScore opponent dict if found.
+    """
+    code_upper = code.upper()
+    code_lower = code.lower()
+
+    for opp in opponents:
+        opponent = opp.get("opponent", {})
+        acr = (opponent.get("acronym") or "").upper()
+        name = (opponent.get("name") or "").lower()
+
+        # Direct acronym match
+        if acr == code_upper:
+            return opponent
+
+        # Code matches opponent name (e.g., code="RED", name="RED Canids")
+        if code_lower in name or name.startswith(code_lower):
+            return opponent
+
+        # Alias match: resolve code to canonical name, compare with PS name
+        alias = TEAM_NAME_ALIASES.get(code_lower)
+        if alias and (alias.lower() in name or name in alias.lower()):
+            return opponent
+
+        # Reverse: resolve PS name to canonical, compare with code
+        ps_alias = TEAM_NAME_ALIASES.get(name) or TEAM_NAME_ALIASES.get(acr.lower())
+        if ps_alias and (ps_alias.lower() == code_lower or code_lower in ps_alias.lower()):
+            return opponent
+
+    return None
+
+
+def _find_pandascore_match(team_codes: list[str]) -> dict | None:
+    """Find a PandaScore match (running or recent past) for the given team codes."""
+    matches = _fetch_pandascore_matches()
+
+    for m in matches:
+        opponents = m.get("opponents", [])
+        matched_count = 0
+        for code in team_codes:
+            if code and _match_code_to_ps_opponent(code, opponents):
+                matched_count += 1
+        # Need at least 2 team codes matching
+        if matched_count >= 2:
+            return m
+
+    return None
+
+
+def _enrich_series_from_pandascore(
+    series: list[dict],
+    team_codes: list[str],
+) -> None:
+    """Enrich completed series games with PandaScore winner data.
+
+    Modifies series entries in-place, adding winner info to final_stats
+    for completed games that have no data from Livestats or snapshots.
+    """
+    # Only process if there are completed games without final_stats
+    needs_data = any(
+        e["state"] == "completed" and e["final_stats"] is None
+        for e in series
+    )
+    if not needs_data:
+        return
+
+    ps_match = _find_pandascore_match(team_codes)
+    if not ps_match:
+        logger.debug("No PandaScore match found for teams %s", team_codes)
+        return
+
+    # Build PandaScore team_id -> team_code mapping
+    ps_id_to_code: dict[int, str] = {}
+    opponents = ps_match.get("opponents", [])
+    for code in team_codes:
+        if not code:
+            continue
+        ps_opponent = _match_code_to_ps_opponent(code, opponents)
+        if ps_opponent and ps_opponent.get("id") is not None:
+            ps_id_to_code[ps_opponent["id"]] = code
+
+    if len(ps_id_to_code) < 2:
+        logger.debug("Could not map PandaScore teams to local codes (matched %d)", len(ps_id_to_code))
+        return
+
+    # Match series games to PandaScore games by position (game number)
+    ps_games = sorted(ps_match.get("games", []), key=lambda g: g.get("position", 0))
+
+    for entry in series:
+        if entry["state"] != "completed" or entry["final_stats"] is not None:
+            continue
+
+        game_number = entry.get("number", 0)
+        # Find corresponding PandaScore game by position
+        ps_game = None
+        for pg in ps_games:
+            if pg.get("position") == game_number and pg.get("finished"):
+                ps_game = pg
+                break
+
+        if not ps_game:
+            continue
+
+        winner_info = ps_game.get("winner", {})
+        winner_ps_id = winner_info.get("id") if winner_info else None
+        winner_code = ps_id_to_code.get(winner_ps_id, "") if winner_ps_id else ""
+
+        blue_code = entry.get("blue_team", {}).get("code", "")
+        red_code = entry.get("red_team", {}).get("code", "")
+
+        # Determine which side won
+        blue_won = winner_code.upper() == blue_code.upper() if winner_code and blue_code else None
+
+        game_length_sec = ps_game.get("length")  # duration in seconds
+
+        # Create minimal final_stats with winner info
+        entry["final_stats"] = {
+            "blue_kills": 0,
+            "red_kills": 0,
+            "blue_gold": 0,
+            "red_gold": 0,
+            "blue_towers": 0,
+            "red_towers": 0,
+            "blue_inhibitors": 0,
+            "red_inhibitors": 0,
+            "blue_dragons": 0,
+            "red_dragons": 0,
+            "blue_barons": 0,
+            "red_barons": 0,
+            "winner": winner_code,
+            "game_length": game_length_sec,
+            "source": "pandascore",
+        }
+
+        logger.info(
+            "PandaScore: G%d winner=%s (length=%ss) for %s vs %s",
+            game_number, winner_code, game_length_sec, blue_code, red_code,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Build series games list
 # ---------------------------------------------------------------------------
 
@@ -1045,7 +1355,58 @@ def _build_series_games(
             entry["final_stats"] = data.get("final_stats")
             entry["players"] = data.get("players")
 
+        # Fallback for completed games where Livestats returned empty data
+        if state == "completed" and game_id and entry["final_stats"] is None:
+            blue_code = (blue_info or {}).get("code", "")
+            red_code = (red_info or {}).get("code", "")
+
+            # 1) Try in-memory live cache (data from when game was still live)
+            cached = _live_game_state_cache.get(game_id)
+            if cached and _has_real_stats(cached.get("live_stats")):
+                entry["final_stats"] = cached["live_stats"]
+                entry["players"] = cached.get("players") or entry["players"]
+                if entry["draft"] is None and cached.get("draft"):
+                    entry["draft"] = cached["draft"]
+                # Persist to DB so it survives restarts
+                _save_live_snapshot(
+                    game_id,
+                    draft=entry["draft"],
+                    stats=entry["final_stats"],
+                    players=entry["players"],
+                    blue_team_code=blue_code,
+                    red_team_code=red_code,
+                    force=True,
+                )
+                logger.info(
+                    "Used in-memory cache for completed game %s (%s vs %s)",
+                    game_id, blue_code, red_code,
+                )
+
+            # 2) Try DB snapshot (survives server restarts)
+            if entry["final_stats"] is None:
+                snap_data = _load_live_snapshot(game_id)
+                if snap_data:
+                    entry["final_stats"] = snap_data["final_stats"]
+                    entry["players"] = snap_data.get("players") or entry["players"]
+                    if entry["draft"] is None and snap_data.get("draft"):
+                        entry["draft"] = snap_data["draft"]
+                    logger.info(
+                        "Used DB snapshot for completed game %s (%s vs %s)",
+                        game_id, blue_code, red_code,
+                    )
+
         series.append(entry)
+
+    # 3rd tier fallback: PandaScore for winner info on completed games
+    team_codes = list({
+        e.get("blue_team", {}).get("code", "")
+        for e in series if e.get("blue_team", {}).get("code")
+    } | {
+        e.get("red_team", {}).get("code", "")
+        for e in series if e.get("red_team", {}).get("code")
+    })
+    if team_codes:
+        _enrich_series_from_pandascore(series, team_codes)
 
     return series
 
@@ -1735,6 +2096,29 @@ def get_live_games_data(minimal: bool = False) -> list[dict]:
                 "db_team_id": db_id,
             }
 
+        # Save live snapshot proactively (persists data for when game completes)
+        if not minimal and game_id and _has_real_stats(live_stats):
+            start_time_str = ev.get("start_time", "")
+            match_dt = None
+            if start_time_str:
+                try:
+                    match_dt = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+                except Exception:
+                    pass
+            _save_live_snapshot(
+                game_id,
+                draft=draft,
+                stats=live_stats,
+                players=players,
+                blue_team_code=blue_raw.get("code", ""),
+                red_team_code=red_raw.get("code", ""),
+                blue_team_name=blue_raw.get("name", ""),
+                red_team_name=red_raw.get("name", ""),
+                blue_db_id=blue_db_id,
+                red_db_id=red_db_id,
+                match_date=match_dt,
+            )
+
         games.append({
             "match_id": ev["match_id"],
             "game_id": game_id,
@@ -1913,6 +2297,29 @@ def get_live_match_data(match_id: str) -> dict | None:
             }
         except Exception:
             logger.exception("enrichment failed for match %s", match_id)
+
+    # Save live snapshot proactively (persists data for when game completes)
+    if current_game_id and _has_real_stats(live_stats):
+        start_time_str = event.get("startTime", "")
+        match_dt = None
+        if start_time_str:
+            try:
+                match_dt = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+            except Exception:
+                pass
+        _save_live_snapshot(
+            current_game_id,
+            draft=draft,
+            stats=live_stats,
+            players=players,
+            blue_team_code=blue_raw.get("code", ""),
+            red_team_code=red_raw.get("code", ""),
+            blue_team_name=blue_raw.get("name", ""),
+            red_team_name=red_raw.get("name", ""),
+            blue_db_id=blue_db_id,
+            red_db_id=red_db_id,
+            match_date=match_dt,
+        )
 
     # Build series games info (with draft/stats for completed games)
     strategy = match_data.get("strategy", {})

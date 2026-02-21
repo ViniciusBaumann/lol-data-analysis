@@ -19,6 +19,7 @@ export { SynergiesPanel } from './SynergiesPanel';
 export { PredictionComparisonPanel } from './PredictionComparisonPanel';
 export { ModelEstimatesPanel } from './ModelEstimatesPanel';
 export { MatchPredictionPanel } from './MatchPredictionPanel';
+export { SeriesAnalysisPanel } from './SeriesAnalysisPanel';
 
 // Schedule view
 export { ScheduleMatchView } from './ScheduleMatchView';

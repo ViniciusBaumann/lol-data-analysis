@@ -14,6 +14,16 @@ export interface ImportResult {
 }
 
 export async function triggerImport(year: number, download = true): Promise<ImportResult> {
-  const { data } = await api.post('/import/', { year, download });
-  return data;
+  try {
+    const { data } = await api.post('/import/', { year, download });
+    console.log(`[settings] Import ${year} concluido:`, {
+      matches_created: data.matches_created,
+      matches_skipped: data.matches_skipped,
+      errors: data.errors || 'nenhum',
+    });
+    return data;
+  } catch (err) {
+    console.error(`[settings] Import ${year} falhou:`, err);
+    throw err;
+  }
 }

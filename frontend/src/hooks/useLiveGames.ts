@@ -25,6 +25,7 @@ export function useLiveGames() {
       setLastUpdated(new Date());
       setError(null);
     } catch (err: unknown) {
+      console.error('[useLiveGames] Erro ao buscar jogos ao vivo:', err);
       const message = err instanceof Error ? err.message : 'Failed to fetch live games';
       setError(message);
       // Keep previous games on poll failure

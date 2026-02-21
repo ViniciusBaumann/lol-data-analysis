@@ -571,3 +571,88 @@ class DataImportLog(models.Model):
 
     def __str__(self) -> str:
         return f"Importacao {self.year} - {self.get_status_display()} ({self.source})"
+
+
+class LiveMatchSnapshot(models.Model):
+    """Snapshot temporario do ultimo estado de um jogo ao vivo.
+
+    Quando um jogo termina, a API Livestats para de retornar dados reais.
+    Este modelo preserva o ultimo estado conhecido para uso como fallback
+    ate que os dados do Oracle's Elixir sejam importados.
+    """
+
+    esports_game_id = models.CharField(
+        max_length=50,
+        unique=True,
+        verbose_name="Game ID (LoL Esports)",
+        help_text="ID do jogo na API LoL Esports.",
+    )
+    blue_team_code = models.CharField(
+        max_length=20,
+        verbose_name="Codigo Time Azul",
+    )
+    red_team_code = models.CharField(
+        max_length=20,
+        verbose_name="Codigo Time Vermelho",
+    )
+    blue_team_name = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name="Nome Time Azul",
+    )
+    red_team_name = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name="Nome Time Vermelho",
+    )
+    blue_team_db_id = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name="ID DB Time Azul",
+        help_text="FK para Team.id (nao FK real para evitar dependencia).",
+    )
+    red_team_db_id = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name="ID DB Time Vermelho",
+        help_text="FK para Team.id (nao FK real para evitar dependencia).",
+    )
+    match_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Data da Partida",
+    )
+    draft_data = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="Draft",
+        help_text="Dict com picks: {'blue_top': 'Ksante', ...}",
+    )
+    final_stats = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="Stats Finais",
+        help_text="Dict com kills, gold, towers, dragons, barons por lado.",
+    )
+    players_data = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="Dados dos Jogadores",
+        help_text="Dict com {'blue': [...], 'red': [...]} jogadores.",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Criado em",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Atualizado em",
+    )
+
+    class Meta:
+        verbose_name = "Snapshot de Jogo ao Vivo"
+        verbose_name_plural = "Snapshots de Jogos ao Vivo"
+        ordering = ["-updated_at"]
+
+    def __str__(self) -> str:
+        return f"{self.blue_team_code} vs {self.red_team_code} ({self.esports_game_id})"

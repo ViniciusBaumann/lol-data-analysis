@@ -397,12 +397,20 @@ function CompletedGameScoreboardComponent({ game, ddragonVersion }: CompletedGam
   const stats = game.final_stats;
   const players = game.players;
   const draft = game.draft;
+  const isPandascoreOnly = stats?.source === 'pandascore';
+  const hasDetailedStats = !!stats && !isPandascoreOnly;
   const hasStats = !!stats;
   const hasPlayers = players && (players.blue.length > 0 || players.red.length > 0);
 
-  // Determine winner based on kills (team with more kills wins)
-  const blueWins = stats ? stats.blue_kills > stats.red_kills : false;
-  const winner = blueWins ? 'blue' : 'red';
+  // Determine winner: prefer explicit winner field, fallback to kills comparison
+  const winner: 'blue' | 'red' = stats?.winner
+    ? (stats.winner.toUpperCase() === game.blue_team.code.toUpperCase() ? 'blue' : 'red')
+    : (stats && stats.blue_kills > stats.red_kills ? 'blue' : 'red');
+
+  // Format game duration
+  const gameDuration = stats?.game_length
+    ? `${Math.floor(stats.game_length / 60)}:${String(stats.game_length % 60).padStart(2, '0')}`
+    : null;
 
   // Map players by role
   const bluePlayers: Record<string, SeriesGamePlayer> = {};
@@ -464,8 +472,26 @@ function CompletedGameScoreboardComponent({ game, ddragonVersion }: CompletedGam
         </div>
       </div>
 
+      {/* PandaScore minimal info (winner + duration, no detailed stats) */}
+      {isPandascoreOnly && (
+        <div className="px-4 py-4 text-center border-b border-zinc-800">
+          <div className="flex items-center justify-center gap-3">
+            <Trophy size={18} className="text-yellow-500" />
+            <span className="text-sm font-bold text-zinc-200">
+              {winner === 'blue' ? game.blue_team.code : game.red_team.code} venceu
+            </span>
+            {gameDuration && (
+              <span className="text-xs text-zinc-500">({gameDuration})</span>
+            )}
+          </div>
+          <p className="text-[10px] text-zinc-600 mt-1">
+            Estatisticas detalhadas indisponiveis
+          </p>
+        </div>
+      )}
+
       {/* Team Stats Bar */}
-      {hasStats && (
+      {hasDetailedStats && (
         <div className="flex items-center justify-between px-4 py-3 bg-zinc-800/30 border-b border-zinc-800">
           <TeamStatsBar
             kills={stats.blue_kills}
@@ -537,7 +563,7 @@ function CompletedGameScoreboardComponent({ game, ddragonVersion }: CompletedGam
       )}
 
       {/* No data fallback */}
-      {!hasPlayers && !draft && !hasStats && (
+      {!hasPlayers && !draft && !hasStats && !isPandascoreOnly && (
         <div className="px-6 py-8 text-center">
           <p className="text-sm text-zinc-500">
             Dados do jogo nao disponiveis.

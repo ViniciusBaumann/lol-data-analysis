@@ -12,6 +12,15 @@ interface SeriesTimelineProps {
 }
 
 function SeriesTimelineComponent({ games, ddragonVersion, selectedGameNumber, onSelectGame }: SeriesTimelineProps) {
+  // Log data gaps in series games
+  for (const sg of games) {
+    if (sg.state === 'completed') {
+      if (!sg.final_stats) console.warn(`[SeriesTimeline] G${sg.number} completado sem final_stats`);
+      if (!sg.draft) console.warn(`[SeriesTimeline] G${sg.number} completado sem draft`);
+      if (!sg.players) console.warn(`[SeriesTimeline] G${sg.number} completado sem players`);
+    }
+  }
+
   const handleGameClick = useCallback((sg: SeriesGame) => {
     const isCompleted = sg.state === 'completed';
     const isCurrent = sg.is_current;
@@ -39,32 +48,42 @@ function SeriesTimelineComponent({ games, ddragonVersion, selectedGameNumber, on
         {games.map((sg, idx) => {
           const isCompleted = sg.state === 'completed';
           const isCurrent = sg.is_current;
-          const isUnstarted = sg.state === 'unstarted';
+          const isUnstarted = sg.state === 'unstarted' || sg.state === 'unneeded';
           const hasData = !!(sg.draft || sg.final_stats || sg.players);
 
           const isSelected = selectedGameNumber === sg.number;
 
+          // Determine winner for completed games
+          const winnerCode = sg.final_stats?.winner
+            || (sg.final_stats && sg.final_stats.blue_kills > sg.final_stats.red_kills
+              ? sg.blue_team.code : sg.final_stats && sg.final_stats.red_kills > sg.final_stats.blue_kills
+              ? sg.red_team.code : null);
+
           return (
-            <button
-              key={sg.game_id || `game-${idx}`}
-              onClick={() => handleGameClick(sg)}
-              className={cn(
-                'relative flex items-center justify-center w-12 h-12 rounded-lg text-sm font-bold transition-all',
-                isCurrent && !isSelected && 'bg-emerald-500/20 text-emerald-400 ring-2 ring-emerald-500/50',
-                isCompleted && hasData && !isSelected && 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer',
-                isCompleted && hasData && isSelected && 'bg-yellow-500/20 text-yellow-400 ring-2 ring-yellow-500/50 cursor-pointer',
-                isCompleted && !hasData && 'bg-zinc-800/50 text-zinc-600 cursor-default',
-                isUnstarted && 'bg-zinc-800/30 text-zinc-700 cursor-default',
+            <div key={sg.game_id || `game-${idx}`} className="flex flex-col items-center gap-1">
+              <button
+                onClick={() => handleGameClick(sg)}
+                className={cn(
+                  'relative flex items-center justify-center w-12 h-12 rounded-lg text-sm font-bold transition-all',
+                  isCurrent && !isSelected && 'bg-emerald-500/20 text-emerald-400 ring-2 ring-emerald-500/50',
+                  isCompleted && hasData && !isSelected && 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer',
+                  isCompleted && hasData && isSelected && 'bg-yellow-500/20 text-yellow-400 ring-2 ring-yellow-500/50 cursor-pointer',
+                  isCompleted && !hasData && 'bg-zinc-800/50 text-zinc-600 cursor-default',
+                  isUnstarted && 'bg-zinc-800/30 text-zinc-700 cursor-default',
+                )}
+                disabled={isUnstarted || (isCompleted && !hasData)}
+              >
+                G{sg.number}
+                {isCurrent && (
+                  <span className="absolute -top-1 -right-1">
+                    <LiveDot />
+                  </span>
+                )}
+              </button>
+              {isCompleted && winnerCode && (
+                <span className="text-[9px] font-bold text-yellow-500">{winnerCode}</span>
               )}
-              disabled={isUnstarted || (isCompleted && !hasData)}
-            >
-              G{sg.number}
-              {isCurrent && (
-                <span className="absolute -top-1 -right-1">
-                  <LiveDot />
-                </span>
-              )}
-            </button>
+            </div>
           );
         })}
       </div>

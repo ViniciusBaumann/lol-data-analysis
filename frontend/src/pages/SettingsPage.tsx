@@ -1,5 +1,6 @@
-import { Settings, Loader2, CheckCircle, AlertCircle, Database } from 'lucide-react';
+import { Settings, Loader2, CheckCircle, AlertCircle, Database, FlaskConical } from 'lucide-react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { triggerImport, ImportResult } from '@/services/settings';
 
 export default function SettingsPage() {
@@ -90,6 +91,27 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Mock Live Test */}
+      <div className="bg-card border border-border rounded-xl p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <FlaskConical size={20} className="text-amber-400" />
+          <h2 className="text-lg font-semibold text-foreground">Verificacao de Dados</h2>
+        </div>
+
+        <p className="text-sm text-muted-foreground">
+          Tela de teste com dados mockados simulando uma serie Bo3 ao vivo entre LOUD vs RED.
+          Todos os paineis de analise sao renderizados com dados completos para verificacao visual.
+        </p>
+
+        <Link
+          to="/settings/mock-live"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm font-medium hover:bg-amber-500/20 transition-colors"
+        >
+          <FlaskConical size={16} />
+          Abrir Mock: LOUD vs RED (Bo3)
+        </Link>
       </div>
     </div>
   );

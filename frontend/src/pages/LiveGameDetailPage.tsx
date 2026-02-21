@@ -13,6 +13,7 @@ import {
   TeamContextPanel,
   SynergiesPanel,
   MatchPredictionPanel,
+  SeriesAnalysisPanel,
   ScheduleMatchView,
 } from '@/components/live';
 
@@ -127,6 +128,20 @@ const GameContent = memo(function GameContent({ game }: GameContentProps) {
   const hasPlayers = game.players && (game.players.blue.length > 0 || game.players.red.length > 0);
   const preds = game.prediction?.predictions ?? null;
 
+  // Log missing data for debugging
+  useMemo(() => {
+    const id = game.match_id;
+    const blue = game.blue_team.code;
+    const red = game.red_team.code;
+    console.log(`[GameContent] ${blue} vs ${red} (${id})`);
+    if (!game.draft) console.warn(`[GameContent] ${id}: draft ausente`);
+    if (!game.live_stats) console.warn(`[GameContent] ${id}: live_stats ausente`);
+    if (!hasPlayers) console.warn(`[GameContent] ${id}: players ausente ou vazio`);
+    if (!game.prediction) console.warn(`[GameContent] ${id}: prediction ausente`);
+    if (!game.enrichment) console.warn(`[GameContent] ${id}: enrichment ausente`);
+    if (!hasSeries) console.warn(`[GameContent] ${id}: serie nao disponivel (< 2 jogos)`);
+  }, [game.match_id, game.blue_team.code, game.red_team.code, game.draft, game.live_stats, hasPlayers, game.prediction, game.enrichment, hasSeries]);
+
   // Check if current game in series is completed
   const isCurrentGameCompleted = useMemo(() => {
     return game.series_games?.find(sg => sg.game_id === game.game_id)?.state === 'completed';
@@ -192,6 +207,14 @@ const GameContent = memo(function GameContent({ game }: GameContentProps) {
                   composition={game.prediction?.composition}
                   blueTeam={game.blue_team}
                   redTeam={game.red_team}
+                  ddragonVersion={game.ddragon_version}
+                />
+              )}
+
+              {/* Series Analysis Panel (fearless draft + objectives + momentum) */}
+              {hasSeries && !isViewingCompletedGame && (
+                <SeriesAnalysisPanel
+                  game={game}
                   ddragonVersion={game.ddragon_version}
                 />
               )}

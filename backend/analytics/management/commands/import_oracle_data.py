@@ -27,6 +27,7 @@ from django.utils.text import slugify
 from analytics.models import (
     DataImportLog,
     League,
+    LiveMatchSnapshot,
     Match,
     Player,
     PlayerMatchStats,
@@ -518,13 +519,25 @@ class Command(BaseCommand):
         import_log.completed_at = timezone.now()
         import_log.save()
 
+        # Clean up old snapshots (>30 days) that were never matched
+        from datetime import timedelta as td
+
+        old_cutoff = timezone.now() - td(days=30)
+        old_snaps = LiveMatchSnapshot.objects.filter(created_at__lt=old_cutoff)
+        old_count = old_snaps.count()
+        if old_count > 0:
+            old_snaps.delete()
+            self.stdout.write(f"  Cleaned up {old_count} old LiveMatchSnapshots (>30 days).")
+
+        remaining_snaps = LiveMatchSnapshot.objects.count()
         self.stdout.write(
             self.style.SUCCESS(
                 f"\nImport completed in {elapsed:.1f}s.\n"
                 f"  Rows processed : {rows_processed}\n"
                 f"  Matches created: {matches_created}\n"
                 f"  Matches skipped: {matches_skipped}\n"
-                f"  Errors         : {len(error_messages)}"
+                f"  Errors         : {len(error_messages)}\n"
+                f"  Live snapshots remaining: {remaining_snaps}"
             )
         )
 
@@ -774,7 +787,90 @@ class Command(BaseCommand):
                 )
             )
 
+        # Try to match and clean up LiveMatchSnapshot for this game
+        blue_kills = 0
+        red_kills = 0
+        for ts in team_stats_list:
+            if ts.side == "Blue":
+                blue_kills = ts.kills
+            elif ts.side == "Red":
+                red_kills = ts.kills
+        self._cleanup_live_snapshot(
+            match_obj, blue_team, red_team, parsed_date,
+            blue_kills, red_kills,
+        )
+
         return match_obj, team_stats_list, player_stats_list
+
+    def _cleanup_live_snapshot(
+        self,
+        match_obj: Match,
+        blue_team: Team,
+        red_team: Team,
+        match_date,
+        blue_kills: int,
+        red_kills: int,
+    ) -> None:
+        """Find and delete LiveMatchSnapshot that corresponds to this Oracle game.
+
+        Matching strategy (all conditions must be true):
+        1. Same teams (either side orientation) via DB IDs
+        2. Date within ±24 hours
+        3. Kill counts match within ±2 per side (live stats may differ slightly)
+
+        This ensures correct matching even in Bo5 series where multiple games
+        between the same teams happen on the same day.
+        """
+        from datetime import timedelta
+
+        from django.db.models import Q
+
+        if not match_date:
+            return
+
+        blue_id = blue_team.pk
+        red_id = red_team.pk
+
+        date_min = match_date - timedelta(hours=24)
+        date_max = match_date + timedelta(hours=24)
+
+        # Find snapshots between these two teams (either orientation) near this date
+        candidates = LiveMatchSnapshot.objects.filter(
+            match_date__range=(date_min, date_max),
+        ).filter(
+            Q(blue_team_db_id=blue_id, red_team_db_id=red_id)
+            | Q(blue_team_db_id=red_id, red_team_db_id=blue_id)
+        )
+
+        for snap in candidates:
+            if not snap.final_stats:
+                continue
+
+            # Determine kill counts based on team orientation
+            if snap.blue_team_db_id == blue_id:
+                # Same orientation: snap blue = oracle blue
+                snap_blue_kills = snap.final_stats.get("blue_kills", 0)
+                snap_red_kills = snap.final_stats.get("red_kills", 0)
+            else:
+                # Swapped: snap blue = oracle red
+                snap_blue_kills = snap.final_stats.get("red_kills", 0)
+                snap_red_kills = snap.final_stats.get("blue_kills", 0)
+
+            # Match if kills are close (live data may lag by 1-2 kills)
+            if (
+                abs(snap_blue_kills - blue_kills) <= 2
+                and abs(snap_red_kills - red_kills) <= 2
+            ):
+                self.stdout.write(
+                    f"  Matched LiveMatchSnapshot {snap.esports_game_id} "
+                    f"-> Oracle game {match_obj.gameid} "
+                    f"(kills: snap={snap_blue_kills}/{snap_red_kills}, "
+                    f"oracle={blue_kills}/{red_kills}). Deleting snapshot."
+                )
+                snap.delete()
+                return
+
+        # No match found - that's fine, snapshot may not exist for this game
 
 
 class _SkipGame(Exception):

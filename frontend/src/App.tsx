@@ -13,6 +13,7 @@ import MatchDetailPage from '@/pages/MatchDetailPage';
 import LiveGamesPage from '@/pages/LiveGamesPage';
 import LiveGameDetailPage from '@/pages/LiveGameDetailPage';
 import SettingsPage from '@/pages/SettingsPage';
+import MockLiveTestPage from '@/pages/MockLiveTestPage';
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
           <Route path="/matches/league/:leagueId" element={<LeagueMatchesPage />} />
           <Route path="/matches/:id" element={<MatchDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/mock-live" element={<MockLiveTestPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

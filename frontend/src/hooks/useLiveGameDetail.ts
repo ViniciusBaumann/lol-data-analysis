@@ -49,6 +49,7 @@ export function useLiveGameDetail(matchId: string | undefined): UseLiveGameDetai
       setLastUpdated(new Date());
       setScheduleMatch(null); // Clear schedule match if we got live data
     } catch (err) {
+      console.error(`[useLiveGameDetail] Fetch direto falhou para match ${matchId}:`, err);
       // If direct fetch fails, try getting from live games list
       try {
         const liveData = await getLiveGames(false);
@@ -58,10 +59,12 @@ export function useLiveGameDetail(matchId: string | undefined): UseLiveGameDetai
           setLastUpdated(new Date());
           setScheduleMatch(null);
         } else {
+          console.warn(`[useLiveGameDetail] Match ${matchId} nao encontrado na lista de jogos ao vivo`);
           // Game not in live list, will trigger schedule fallback
           setGame(undefined);
         }
-      } catch {
+      } catch (listErr) {
+        console.error(`[useLiveGameDetail] Fallback para lista tambem falhou:`, listErr);
         const message = err instanceof Error ? err.message : 'Falha ao carregar dados';
         setError(message);
         setGame(undefined);
