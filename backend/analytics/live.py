@@ -1661,6 +1661,7 @@ def compute_player_champion_stats(
             champion = draft.get(slot)
 
             if not summoner_name or not champion:
+                logger.debug("[player_champ] %s: empty summoner_name=%r or champion=%r", slot, summoner_name, champion)
                 result[slot] = None
                 continue
 
@@ -1668,6 +1669,7 @@ def compute_player_champion_stats(
                 # Find player using flexible name matching
                 player = _find_player_by_name(summoner_name)
                 if not player:
+                    logger.info("[player_champ] %s: player not found in DB for '%s'", slot, summoner_name)
                     result[slot] = None
                     continue
 
@@ -1699,9 +1701,12 @@ def compute_player_champion_stats(
                         "wins": wins,
                         "win_rate": win_rate,
                     }
+                    logger.debug("[player_champ] %s: %s on %s -> %d games, %.1f%% WR", slot, player.name, champion, pc_count, win_rate)
                 else:
+                    logger.info("[player_champ] %s: player '%s' (db=%s) has 0 games on '%s'", slot, summoner_name, player.name, champion)
                     result[slot] = None
             except Exception:
+                logger.exception("[player_champ] %s: error computing stats for '%s' on '%s'", slot, summoner_name, champion)
                 result[slot] = None
 
     return result
@@ -2037,6 +2042,12 @@ def get_live_games_data(minimal: bool = False) -> list[dict]:
                     red_synergies = compute_team_synergies(draft, "red")
                     champion_stats = compute_champion_stats_for_draft(draft)
                     player_champion_stats = compute_player_champion_stats(players, draft)
+                    logger.debug(
+                        "[enrichment] game %s: player_champion_stats slots=%s, non-null=%d",
+                        game_id,
+                        list(player_champion_stats.keys()),
+                        sum(1 for v in player_champion_stats.values() if v is not None),
+                    )
 
                     # Enrich lane matchups with player champion stats
                     if lane_matchups and player_champion_stats:
@@ -2300,6 +2311,22 @@ def get_live_match_data(match_id: str) -> dict | None:
             lane_matchups = compute_lane_matchups(draft)
             blue_synergies = compute_team_synergies(draft, "blue")
             red_synergies = compute_team_synergies(draft, "red")
+            champion_stats = compute_champion_stats_for_draft(draft)
+            player_champion_stats = compute_player_champion_stats(players, draft)
+            logger.debug(
+                "[enrichment] match %s: player_champion_stats slots=%s, non-null=%d",
+                match_id,
+                list(player_champion_stats.keys()),
+                sum(1 for v in player_champion_stats.values() if v is not None),
+            )
+
+            # Enrich lane matchups with player champion stats
+            if lane_matchups and player_champion_stats:
+                for mu in lane_matchups:
+                    pos = mu["position"]
+                    mu["blue_player_stats"] = player_champion_stats.get(f"blue_{pos}")
+                    mu["red_player_stats"] = player_champion_stats.get(f"red_{pos}")
+
             team_context = None
             match_prediction = None
             if blue_db_id and red_db_id:
@@ -2308,6 +2335,7 @@ def get_live_match_data(match_id: str) -> dict | None:
             enrichment = {
                 "lane_matchups": lane_matchups,
                 "synergies": {"blue": blue_synergies, "red": red_synergies},
+                "champion_stats": champion_stats,
                 "team_context": team_context,
                 "match_prediction": match_prediction,
             }
