@@ -1,6 +1,7 @@
-import { memo } from 'react';
-import { TrendingUp, Swords, Target, Mountain, Crown, Clock, ExternalLink, Zap, Flame, TrendingDown, Users, Coins, Sparkles } from 'lucide-react';
-import { LiveGameDraft, DraftPredictions, MatchPredictionEnriched, TeamContext, CompositionAnalysis, CompositionScores } from '@/types';
+import { memo, useState, useCallback } from 'react';
+import { TrendingUp, Swords, Target, Mountain, Crown, Clock, ExternalLink, Zap, Flame, TrendingDown, Users, Coins, Sparkles, Loader2 } from 'lucide-react';
+import { LiveGameDraft, DraftPredictions, MatchPredictionEnriched, TeamContext, CompositionAnalysis, CompositionScores, ChampionPowerSpike, DraftPredictionResponse } from '@/types';
+import { getDraftPrediction } from '@/services/draft';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -20,6 +21,17 @@ const CHAMPION_KEY_MAP: Record<string, string> = {
   "Rek'Sai": "RekSai",
   "Bel'Veth": "Belveth",
   "Nunu & Willump": "Nunu",
+};
+
+const SPIKE_TAG_LABELS: Record<string, string> = {
+  hypercarry: 'Hypercarry',
+  scaling: 'Scaling',
+  early_game: 'Early Game',
+  assassin: 'Assassino',
+  bruiser: 'Bruiser',
+  tank: 'Tank',
+  enchanter: 'Enchanter',
+  default: 'Padrao',
 };
 
 // ---------------------------------------------------------------------------
@@ -55,6 +67,17 @@ function formatTimeRange(range?: [number, number]): string {
   return `${formatMinutesToTime(range[0])} - ${formatMinutesToTime(range[1])}`;
 }
 
+function buildSpikeTooltip(champ: string, spike: ChampionPowerSpike | undefined): string {
+  if (!spike) return champ;
+  const tagLabel = SPIKE_TAG_LABELS[spike.spike_tag] || spike.spike_tag;
+  const timeFormatted = formatMinutesToTime(spike.spike_time_min);
+  return `${champ}\n` +
+    `Power Spike: ${spike.items} ${spike.items === 1 ? 'item' : 'itens'}\n` +
+    `Gold necessario: ${spike.gold_threshold.toLocaleString()}g\n` +
+    `Tempo estimado: ~${timeFormatted}\n` +
+    `Tipo: ${tagLabel}`;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -66,6 +89,7 @@ interface MatchPredictionPanelProps {
   matchPrediction?: MatchPredictionEnriched | null;
   teamContext?: TeamContext | null;
   composition?: CompositionAnalysis | null;
+  powerSpikes?: Record<string, ChampionPowerSpike> | null;
   blueTeam: { name: string; code: string; image?: string };
   redTeam: { name: string; code: string; image?: string };
   ddragonVersion: string;
@@ -123,23 +147,63 @@ function MatchPredictionPanelComponent({
   matchPrediction,
   teamContext,
   composition,
+  powerSpikes,
   blueTeam,
   redTeam,
   ddragonVersion,
 }: MatchPredictionPanelProps) {
-  const hasPredictions = predictions != null;
-  const blueBetter = hasPredictions && predictions.blue_win_prob > predictions.red_win_prob;
+  // Draft-only mode state
+  const [draftOnlyMode, setDraftOnlyMode] = useState(false);
+  const [draftOnlyPredictions, setDraftOnlyPredictions] = useState<DraftPredictions | null>(null);
+  const [draftOnlyComposition, setDraftOnlyComposition] = useState<CompositionAnalysis | null>(null);
+  const [draftOnlyPowerSpikes, setDraftOnlyPowerSpikes] = useState<Record<string, ChampionPowerSpike> | null>(null);
+  const [draftOnlyLoading, setDraftOnlyLoading] = useState(false);
+
+  const handleToggleDraftOnly = useCallback(async () => {
+    const nextMode = !draftOnlyMode;
+    setDraftOnlyMode(nextMode);
+
+    if (nextMode && !draftOnlyPredictions) {
+      // Fetch draft-only prediction (no team IDs)
+      setDraftOnlyLoading(true);
+      try {
+        const draftPayload: Record<string, string> = {};
+        for (const side of ['blue', 'red'] as const) {
+          for (const pos of POSITIONS) {
+            const slot = `${side}_${pos}` as keyof LiveGameDraft;
+            draftPayload[slot] = draft[slot] as string;
+          }
+        }
+        const result: DraftPredictionResponse = await getDraftPrediction(draftPayload);
+        setDraftOnlyPredictions(result.predictions);
+        setDraftOnlyComposition(result.composition ?? null);
+        setDraftOnlyPowerSpikes(result.power_spikes ?? null);
+      } catch (err) {
+        console.error('Draft-only prediction failed:', err);
+      } finally {
+        setDraftOnlyLoading(false);
+      }
+    }
+  }, [draftOnlyMode, draftOnlyPredictions, draft]);
+
+  // Select active data based on mode
+  const activePredictions = draftOnlyMode ? draftOnlyPredictions : (predictions ?? null);
+  const activeComposition = draftOnlyMode ? draftOnlyComposition : (composition ?? null);
+  const activePowerSpikes = draftOnlyMode ? draftOnlyPowerSpikes : (powerSpikes ?? null);
+
+  const hasPredictions = activePredictions != null;
+  const blueBetter = hasPredictions && activePredictions.blue_win_prob > activePredictions.red_win_prob;
   const hasTeamContext = teamContext != null;
-  const hasComposition = composition != null;
+  const hasComposition = activeComposition != null;
 
   // Get champion names for each position
   const blueChampions = POSITIONS.map((pos) => draft[`blue_${pos}` as keyof LiveGameDraft] as string);
   const redChampions = POSITIONS.map((pos) => draft[`red_${pos}` as keyof LiveGameDraft] as string);
 
-  // Compare with team-only prediction if available
-  const hasComparison = hasPredictions && matchPrediction?.team1_win_prob != null;
+  // Compare with team-only prediction if available (only in normal mode)
+  const hasComparison = !draftOnlyMode && hasPredictions && matchPrediction?.team1_win_prob != null;
   const teamOnlyBlueProb = matchPrediction?.team1_win_prob ?? 50;
-  const draftDiff = hasPredictions ? predictions.blue_win_prob - teamOnlyBlueProb : 0;
+  const draftDiff = hasPredictions ? activePredictions.blue_win_prob - teamOnlyBlueProb : 0;
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
@@ -149,9 +213,27 @@ function MatchPredictionPanelComponent({
           <div className="flex items-center gap-2">
             <TrendingUp size={16} className="text-emerald-400" />
             <span className="text-sm font-semibold text-zinc-200">Predicao da Partida</span>
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${draftOnlyMode ? 'bg-zinc-700 text-zinc-400' : 'bg-emerald-500/15 text-emerald-400'}`}>
+              {draftOnlyMode ? 'Apenas Draft' : 'Draft + Contexto'}
+            </span>
+            {draftOnlyLoading && <Loader2 size={12} className="animate-spin text-zinc-500" />}
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Draft + Contexto</span>
+            {/* Draft-Only Toggle Switch */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleToggleDraftOnly}
+                className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none"
+                style={{ backgroundColor: draftOnlyMode ? '#52525b' : '#10b981' }}
+                title={draftOnlyMode ? 'Ativar contexto de time' : 'Desativar contexto de time (apenas draft)'}
+              >
+                <span
+                  className="inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform"
+                  style={{ transform: draftOnlyMode ? 'translateX(2px)' : 'translateX(18px)' }}
+                />
+              </button>
+              <span className="text-[10px] text-zinc-600">Contexto</span>
+            </div>
             <button
               onClick={() => {
                 const url = `/compare?team1=${encodeURIComponent(blueTeam.name)}&team2=${encodeURIComponent(redTeam.name)}`;
@@ -182,16 +264,20 @@ function MatchPredictionPanelComponent({
               </div>
             </div>
             <div className="flex items-center gap-1">
-              {blueChampions.map((champ, idx) => (
-                <img
-                  key={idx}
-                  src={champImgUrl(ddragonVersion, champ)}
-                  alt={champ}
-                  title={champ}
-                  className="w-8 h-8 rounded bg-zinc-800 ring-1 ring-blue-500/30"
-                  loading="lazy"
-                />
-              ))}
+              {blueChampions.map((champ, idx) => {
+                const slot = `blue_${POSITIONS[idx]}`;
+                const spike = activePowerSpikes?.[slot];
+                return (
+                  <img
+                    key={idx}
+                    src={champImgUrl(ddragonVersion, champ)}
+                    alt={champ}
+                    title={buildSpikeTooltip(champ, spike)}
+                    className="w-8 h-8 rounded bg-zinc-800 ring-1 ring-blue-500/30"
+                    loading="lazy"
+                  />
+                );
+              })}
             </div>
           </div>
 
@@ -201,11 +287,11 @@ function MatchPredictionPanelComponent({
               <>
                 <div className="flex items-center gap-3 mb-1">
                   <span className={`text-2xl font-black ${blueBetter ? 'text-blue-400' : 'text-zinc-500'}`}>
-                    {predictions.blue_win_prob}%
+                    {activePredictions.blue_win_prob}%
                   </span>
                   <span className="text-zinc-600">-</span>
                   <span className={`text-2xl font-black ${!blueBetter ? 'text-red-400' : 'text-zinc-500'}`}>
-                    {predictions.red_win_prob}%
+                    {activePredictions.red_win_prob}%
                   </span>
                 </div>
                 {hasComparison && Math.abs(draftDiff) >= 1 && (
@@ -236,16 +322,20 @@ function MatchPredictionPanelComponent({
               )}
             </div>
             <div className="flex items-center justify-end gap-1">
-              {redChampions.map((champ, idx) => (
-                <img
-                  key={idx}
-                  src={champImgUrl(ddragonVersion, champ)}
-                  alt={champ}
-                  title={champ}
-                  className="w-8 h-8 rounded bg-zinc-800 ring-1 ring-red-500/30"
-                  loading="lazy"
-                />
-              ))}
+              {redChampions.map((champ, idx) => {
+                const slot = `red_${POSITIONS[idx]}`;
+                const spike = activePowerSpikes?.[slot];
+                return (
+                  <img
+                    key={idx}
+                    src={champImgUrl(ddragonVersion, champ)}
+                    alt={champ}
+                    title={buildSpikeTooltip(champ, spike)}
+                    className="w-8 h-8 rounded bg-zinc-800 ring-1 ring-red-500/30"
+                    loading="lazy"
+                  />
+                );
+              })}
             </div>
           </div>
         </div>
@@ -256,7 +346,7 @@ function MatchPredictionPanelComponent({
             {/* Blue Composition */}
             <div className="flex-1">
               <div className="flex items-center gap-1 flex-wrap">
-                {getTopCompTypes(composition.blue).map(({ key, value }) => {
+                {getTopCompTypes(activeComposition.blue).map(({ key, value }) => {
                   const compType = COMP_TYPES.find(t => t.key === key)!;
                   return (
                     <span
@@ -270,7 +360,7 @@ function MatchPredictionPanelComponent({
                   );
                 })}
                 {(() => {
-                  const warning = getDamageWarning(composition.blue);
+                  const warning = getDamageWarning(activeComposition.blue);
                   if (warning) {
                     return (
                       <span
@@ -284,7 +374,7 @@ function MatchPredictionPanelComponent({
                   }
                   return null;
                 })()}
-                {hasNoEngage(composition.blue) && (
+                {hasNoEngage(activeComposition.blue) && (
                   <span
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
                     title="Time sem engage confiavel"
@@ -293,7 +383,7 @@ function MatchPredictionPanelComponent({
                     <span>Sem Engage</span>
                   </span>
                 )}
-                {getTopCompTypes(composition.blue).length === 0 && !getDamageWarning(composition.blue) && !hasNoEngage(composition.blue) && (
+                {getTopCompTypes(activeComposition.blue).length === 0 && !getDamageWarning(activeComposition.blue) && !hasNoEngage(activeComposition.blue) && (
                   <span className="text-[10px] text-zinc-500">Comp balanceada</span>
                 )}
               </div>
@@ -308,7 +398,7 @@ function MatchPredictionPanelComponent({
             {/* Red Composition */}
             <div className="flex-1">
               <div className="flex items-center gap-1 flex-wrap justify-end">
-                {getTopCompTypes(composition.red).map(({ key, value }) => {
+                {getTopCompTypes(activeComposition.red).map(({ key, value }) => {
                   const compType = COMP_TYPES.find(t => t.key === key)!;
                   return (
                     <span
@@ -322,7 +412,7 @@ function MatchPredictionPanelComponent({
                   );
                 })}
                 {(() => {
-                  const warning = getDamageWarning(composition.red);
+                  const warning = getDamageWarning(activeComposition.red);
                   if (warning) {
                     return (
                       <span
@@ -336,7 +426,7 @@ function MatchPredictionPanelComponent({
                   }
                   return null;
                 })()}
-                {hasNoEngage(composition.red) && (
+                {hasNoEngage(activeComposition.red) && (
                   <span
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
                     title="Time sem engage confiavel"
@@ -345,7 +435,7 @@ function MatchPredictionPanelComponent({
                     <span>Sem Engage</span>
                   </span>
                 )}
-                {getTopCompTypes(composition.red).length === 0 && !getDamageWarning(composition.red) && !hasNoEngage(composition.red) && (
+                {getTopCompTypes(activeComposition.red).length === 0 && !getDamageWarning(activeComposition.red) && !hasNoEngage(activeComposition.red) && (
                   <span className="text-[10px] text-zinc-500">Comp balanceada</span>
                 )}
               </div>
@@ -360,11 +450,11 @@ function MatchPredictionPanelComponent({
               <div className="h-3 rounded-full overflow-hidden flex bg-zinc-800">
                 <div
                   className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-500"
-                  style={{ width: `${predictions.blue_win_prob}%` }}
+                  style={{ width: `${activePredictions.blue_win_prob}%` }}
                 />
                 <div
                   className="h-full bg-gradient-to-r from-red-400 to-red-600 transition-all duration-500"
-                  style={{ width: `${predictions.red_win_prob}%` }}
+                  style={{ width: `${activePredictions.red_win_prob}%` }}
                 />
               </div>
               {/* Team-only prediction marker (shows draft shift on the bar) */}
@@ -381,8 +471,8 @@ function MatchPredictionPanelComponent({
               )}
             </div>
 
-            {/* Key Factors - Fatores Decisivos */}
-            {hasTeamContext && (
+            {/* Key Factors - Fatores Decisivos (hidden in draft-only mode) */}
+            {!draftOnlyMode && hasTeamContext && (
               <div className="pt-2">
                 <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Fatores Decisivos</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
@@ -535,9 +625,9 @@ function MatchPredictionPanelComponent({
                   <Swords size={12} className="text-zinc-500" />
                   <span className="text-[10px] text-zinc-500 uppercase">Kills</span>
                 </div>
-                <p className="text-lg font-bold text-zinc-200">{predictions.total_kills}</p>
-                {predictions.kills_range && (
-                  <p className="text-[10px] text-zinc-500">{formatRange(predictions.kills_range)}</p>
+                <p className="text-lg font-bold text-zinc-200">{activePredictions.total_kills}</p>
+                {activePredictions.kills_range && (
+                  <p className="text-[10px] text-zinc-500">{formatRange(activePredictions.kills_range)}</p>
                 )}
               </div>
 
@@ -546,9 +636,9 @@ function MatchPredictionPanelComponent({
                   <Target size={12} className="text-zinc-500" />
                   <span className="text-[10px] text-zinc-500 uppercase">Torres</span>
                 </div>
-                <p className="text-lg font-bold text-zinc-200">{predictions.total_towers}</p>
-                {predictions.towers_range && (
-                  <p className="text-[10px] text-zinc-500">{formatRange(predictions.towers_range)}</p>
+                <p className="text-lg font-bold text-zinc-200">{activePredictions.total_towers}</p>
+                {activePredictions.towers_range && (
+                  <p className="text-[10px] text-zinc-500">{formatRange(activePredictions.towers_range)}</p>
                 )}
               </div>
 
@@ -557,9 +647,9 @@ function MatchPredictionPanelComponent({
                   <Mountain size={12} className="text-zinc-500" />
                   <span className="text-[10px] text-zinc-500 uppercase">Dragons</span>
                 </div>
-                <p className="text-lg font-bold text-zinc-200">{predictions.total_dragons}</p>
-                {predictions.dragons_range && (
-                  <p className="text-[10px] text-zinc-500">{formatRange(predictions.dragons_range)}</p>
+                <p className="text-lg font-bold text-zinc-200">{activePredictions.total_dragons}</p>
+                {activePredictions.dragons_range && (
+                  <p className="text-[10px] text-zinc-500">{formatRange(activePredictions.dragons_range)}</p>
                 )}
               </div>
 
@@ -568,9 +658,9 @@ function MatchPredictionPanelComponent({
                   <Crown size={12} className="text-zinc-500" />
                   <span className="text-[10px] text-zinc-500 uppercase">Barons</span>
                 </div>
-                <p className="text-lg font-bold text-zinc-200">{predictions.total_barons}</p>
-                {predictions.barons_range && (
-                  <p className="text-[10px] text-zinc-500">{formatRange(predictions.barons_range)}</p>
+                <p className="text-lg font-bold text-zinc-200">{activePredictions.total_barons}</p>
+                {activePredictions.barons_range && (
+                  <p className="text-[10px] text-zinc-500">{formatRange(activePredictions.barons_range)}</p>
                 )}
               </div>
 

@@ -9,8 +9,6 @@ import {
   Coins,
   TrendingUp,
   TrendingDown,
-  AlertTriangle,
-  Swords,
   Zap,
   ChevronRight,
   Target,
@@ -29,7 +27,6 @@ import type {
   TeamObjectivePerformance,
   SeriesMomentum,
   SeriesAdjustedPrediction,
-  ChampionPoolMetric,
   SeriesSideTracker,
   ObjectiveForecast,
   ObjectiveForecastEntry,
@@ -556,119 +553,6 @@ function MomentumSection({
 }
 
 // ---------------------------------------------------------------------------
-// Section 4: Champion Pool Impact
-// ---------------------------------------------------------------------------
-
-interface ChampionPoolSectionProps {
-  bluePool: ChampionPoolMetric;
-  redPool: ChampionPoolMetric;
-  ddragonVersion: string;
-}
-
-function ChampionPoolSection({ bluePool, redPool, ddragonVersion }: ChampionPoolSectionProps) {
-  return (
-    <div>
-      <div className="flex items-center gap-2 mb-3">
-        <Swords size={14} className="text-violet-400" />
-        <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-          Pool de Campeoes
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { pool: bluePool, color: 'blue' as const },
-          { pool: redPool, color: 'red' as const },
-        ].map(({ pool, color }) => (
-          <div key={color} className="bg-zinc-800/30 rounded-lg p-2.5">
-            {/* Team header + constraint index */}
-            <div className="flex items-center justify-between mb-2">
-              <span className={cn('text-[11px] font-bold', color === 'blue' ? 'text-blue-400' : 'text-red-400')}>
-                {pool.teamCode}
-              </span>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] text-zinc-500">Restricao</span>
-                <div className={cn(
-                  'px-1.5 py-0.5 rounded text-[10px] font-black tabular-nums',
-                  pool.constraintIndex >= 60
-                    ? 'bg-red-500/20 text-red-400'
-                    : pool.constraintIndex >= 30
-                      ? 'bg-amber-500/20 text-amber-400'
-                      : 'bg-emerald-500/20 text-emerald-400',
-                )}>
-                  {pool.constraintIndex}/100
-                </div>
-              </div>
-            </div>
-
-            {/* Stats */}
-            <div className="space-y-1 mb-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-zinc-500">Picks usados</span>
-                <span className="text-[10px] text-zinc-300 font-bold tabular-nums">{pool.uniquePicksUsed}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-zinc-500">Meta disponiveis</span>
-                <span className="text-[10px] text-zinc-300 font-bold tabular-nums">
-                  {pool.metaPicksRemaining}/{pool.totalMetaPicks}
-                </span>
-              </div>
-              {pool.estimatedPenalty < -0.3 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-zinc-500">Penalidade est.</span>
-                  <span className="text-[10px] text-amber-400 font-bold tabular-nums">
-                    {pool.estimatedPenalty.toFixed(1)}%
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Constrained positions */}
-            {pool.constrainedPositions.length > 0 && (
-              <div className="flex items-center gap-1 flex-wrap mt-1.5">
-                <AlertTriangle size={10} className="text-amber-400" />
-                {pool.constrainedPositions.map(pos => (
-                  <span
-                    key={pos}
-                    className="px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-[9px] font-bold text-amber-400 uppercase"
-                  >
-                    {POS_LABELS[pos] ?? pos}
-                  </span>
-                ))}
-                <span className="text-[9px] text-zinc-600">restrito</span>
-              </div>
-            )}
-
-            {/* Used by position */}
-            <div className="mt-2 space-y-1">
-              {Object.entries(pool.usedByPosition)
-                .filter(([_, champs]) => champs.length > 0)
-                .map(([pos, champs]) => (
-                  <div key={pos} className="flex items-center gap-1">
-                    <span className="text-[9px] font-bold text-zinc-600 uppercase w-6">{POS_LABELS[pos]?.[0] ?? pos[0]}</span>
-                    <div className="flex items-center gap-0.5">
-                      {champs.map((c, i) => (
-                        <img
-                          key={i}
-                          src={champImg(ddragonVersion, c)}
-                          alt={c}
-                          title={c}
-                          className="w-5 h-5 rounded bg-zinc-800 ring-1 ring-zinc-600 grayscale opacity-50"
-                          loading="lazy"
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Section 5: Objective Forecast for Next Map
 // ---------------------------------------------------------------------------
 
@@ -863,14 +747,6 @@ function SeriesAnalysisPanelComponent({ game, ddragonVersion }: SeriesAnalysisPa
           sideTracker={analysis.sideTracker}
         />
 
-        <div className="h-px bg-zinc-800" />
-
-        {/* Champion Pool */}
-        <ChampionPoolSection
-          bluePool={analysis.bluePool}
-          redPool={analysis.redPool}
-          ddragonVersion={ddragonVersion}
-        />
       </div>
     </div>
   );

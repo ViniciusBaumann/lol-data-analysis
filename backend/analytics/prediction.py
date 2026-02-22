@@ -51,7 +51,58 @@ from .prediction_features import (
     compute_lane_matchup_features,
     parse_patch_to_numeric,
     get_champion_tags,
+    get_champion_power_spike,
 )
+
+
+def compute_power_spikes(draft: dict) -> dict:
+    """Compute power-spike info for every champion slot in the draft.
+
+    For each slot (e.g. ``blue_top`` … ``red_sup``), returns the champion's
+    spike metadata plus an estimated ``spike_time_min`` derived from the
+    champion's average gold-per-minute in that position.
+
+    Args:
+        draft: Dict with keys ``blue_top`` through ``red_sup``.
+
+    Returns:
+        Dict keyed by slot name, each value a dict with:
+        ``champion``, ``items``, ``gold_threshold``, ``spike_tag``,
+        ``avg_gold_per_min``, ``spike_time_min``.
+    """
+    positions = ["top", "jng", "mid", "bot", "sup"]
+    result: dict[str, dict] = {}
+
+    for side in ["blue", "red"]:
+        for pos in positions:
+            slot = f"{side}_{pos}"
+            champion = draft.get(slot, "")
+            if not champion:
+                continue
+
+            spike = get_champion_power_spike(champion)
+            avg_gold_per_min = 0.0
+
+            stats = compute_champion_aggregate_stats(champion, pos)
+            if stats is not None:
+                avg_gold_per_min = stats.get("avg_gold_per_min", 0.0) or 0.0
+
+            if avg_gold_per_min > 0:
+                spike_time = spike["gold_threshold"] / avg_gold_per_min
+            else:
+                # Fallback: estimate ~380 gold/min (pro average)
+                spike_time = spike["gold_threshold"] / 380.0
+
+            result[slot] = {
+                "champion": champion,
+                "items": spike["items"],
+                "gold_threshold": spike["gold_threshold"],
+                "spike_tag": spike["spike_tag"],
+                "avg_gold_per_min": round(avg_gold_per_min, 1),
+                "spike_time_min": round(spike_time, 1),
+            }
+
+    return result
 
 
 def get_default_team_features() -> dict:

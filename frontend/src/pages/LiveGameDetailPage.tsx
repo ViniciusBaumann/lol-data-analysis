@@ -205,6 +205,7 @@ const GameContent = memo(function GameContent({ game }: GameContentProps) {
                   matchPrediction={game.enrichment?.match_prediction}
                   teamContext={game.enrichment?.team_context}
                   composition={game.prediction?.composition}
+                  powerSpikes={game.prediction?.power_spikes ?? null}
                   blueTeam={game.blue_team}
                   redTeam={game.red_team}
                   ddragonVersion={game.ddragon_version}

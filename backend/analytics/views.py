@@ -1391,6 +1391,13 @@ class DraftPredictView(APIView):
         if "error" in result:
             return Response(result, status=status.HTTP_400_BAD_REQUEST)
 
+        # Attach power spike data for each champion slot
+        from .prediction import compute_power_spikes
+        try:
+            result["power_spikes"] = compute_power_spikes(draft)
+        except Exception:
+            result["power_spikes"] = None
+
         return Response(result)
 
 

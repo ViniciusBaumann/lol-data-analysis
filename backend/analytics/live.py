@@ -2021,6 +2021,14 @@ def get_live_games_data(minimal: bool = False) -> list[dict]:
                 except Exception:
                     logger.exception("predict_draft failed for game %s", game_id)
 
+                # Attach power spike data
+                if prediction is not None:
+                    try:
+                        from .prediction import compute_power_spikes
+                        prediction["power_spikes"] = compute_power_spikes(draft)
+                    except Exception:
+                        logger.exception("compute_power_spikes failed for game %s", game_id)
+
             # Analytics enrichment (only for current in-progress game)
             if draft:
                 try:
@@ -2276,6 +2284,14 @@ def get_live_match_data(match_id: str) -> dict | None:
             prediction = predict_draft(draft, blue_team_id=blue_db_id, red_team_id=red_db_id)
         except Exception:
             logger.exception("predict_draft failed for match %s", match_id)
+
+        # Attach power spike data
+        if prediction is not None:
+            try:
+                from .prediction import compute_power_spikes
+                prediction["power_spikes"] = compute_power_spikes(draft)
+            except Exception:
+                logger.exception("compute_power_spikes failed for match %s", match_id)
 
     # Analytics enrichment
     enrichment = None

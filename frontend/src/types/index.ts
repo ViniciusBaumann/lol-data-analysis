@@ -411,9 +411,19 @@ export interface CompositionAnalysis {
   red: CompositionScores;
 }
 
+export interface ChampionPowerSpike {
+  champion: string;
+  items: number;
+  gold_threshold: number;
+  spike_tag: string;
+  avg_gold_per_min: number;
+  spike_time_min: number;
+}
+
 export interface DraftPredictionResponse {
   predictions: DraftPredictions | null;
   composition?: CompositionAnalysis;
+  power_spikes?: Record<string, ChampionPowerSpike> | null;
   features_available: boolean;
   models_loaded: boolean;
   teams_provided?: boolean;
@@ -514,6 +524,7 @@ export interface LiveGamePlayers {
 export interface LiveGamePrediction {
   predictions: DraftPredictions | null;
   composition?: CompositionAnalysis;
+  power_spikes?: Record<string, ChampionPowerSpike> | null;
   features_available: boolean;
   models_loaded: boolean;
   teams_provided?: boolean;

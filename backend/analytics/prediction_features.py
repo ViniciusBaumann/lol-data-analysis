@@ -233,6 +233,57 @@ def get_champion_tags(champion: str) -> list[str]:
     return CHAMPION_TAGS.get(normalized, CHAMPION_TAGS.get(champion, DEFAULT_TAGS))
 
 
+# ---------------------------------------------------------------------------
+# Power Spike configuration
+# ---------------------------------------------------------------------------
+# Maps a champion tag to (items_needed, gold_threshold) for the power spike.
+
+POWER_SPIKE_BY_TAG: dict[str, tuple[int, int]] = {
+    "hypercarry": (3, 9600),
+    "scaling": (3, 8800),
+    "early_game": (1, 3200),
+    "assassin": (2, 6400),
+    "bruiser": (2, 5600),
+    "tank": (2, 5600),
+    "enchanter": (2, 4800),
+}
+
+_POWER_SPIKE_DEFAULT = (2, 6400)
+
+# Priority order: first matching tag wins.
+SPIKE_TAG_PRIORITY: list[str] = [
+    "hypercarry",
+    "early_game",
+    "assassin",
+    "enchanter",
+    "tank",
+    "bruiser",
+    "scaling",
+]
+
+
+def get_champion_power_spike(champion: str) -> dict:
+    """Return power-spike metadata for *champion*.
+
+    Returns:
+        Dict with keys ``items``, ``gold_threshold``, ``spike_tag``.
+    """
+    tags = get_champion_tags(champion)
+
+    for priority_tag in SPIKE_TAG_PRIORITY:
+        if priority_tag in tags:
+            items, gold = POWER_SPIKE_BY_TAG[priority_tag]
+            return {"items": items, "gold_threshold": gold, "spike_tag": priority_tag}
+
+    # Check for scaling without hypercarry (already handled by priority order)
+    if "scaling" in tags:
+        items, gold = POWER_SPIKE_BY_TAG["scaling"]
+        return {"items": items, "gold_threshold": gold, "spike_tag": "scaling"}
+
+    items, gold = _POWER_SPIKE_DEFAULT
+    return {"items": items, "gold_threshold": gold, "spike_tag": "default"}
+
+
 def compute_patch_champion_stats(
     champion: str,
     position: str,
