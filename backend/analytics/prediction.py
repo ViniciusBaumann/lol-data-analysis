@@ -446,11 +446,11 @@ def get_team_elo(team_id: int, league_id: int | None = None) -> dict:
         except TeamEloRating.DoesNotExist:
             pass
 
-    # Fallback: most recent ELO for team in any league
+    # Fallback: highest ELO for team across all leagues (primary league)
     elo = (
         TeamEloRating.objects
         .filter(team_id=team_id)
-        .order_by("-last_match_date")
+        .order_by("-elo_rating")
         .first()
     )
     if elo:

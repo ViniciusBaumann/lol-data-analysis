@@ -149,6 +149,9 @@ TEAM_NAME_ALIASES: dict[str, str] = {
     "lev": "leviatan",
     "los grandes": "los grandes",
     "los": "los grandes",
+    "løs": "los grandes",
+    "los grandes academy": "los grandes academy",
+    "lga": "los grandes academy",
     "isurus": "isurus",
 
     # ===== LCP (Pacific) =====

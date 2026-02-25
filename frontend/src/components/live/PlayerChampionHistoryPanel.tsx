@@ -57,15 +57,23 @@ function PlayerChampionHistoryPanelComponent({ matchups }: PlayerChampionHistory
               </div>
 
               {/* Blue stats */}
-              <div className="w-16 text-center">
+              <div className="w-20 text-center">
                 {bluePs ? (
-                  <span className={cn(
-                    'font-bold tabular-nums',
-                    blueGood ? 'text-blue-400' : 'text-zinc-500'
-                  )}>
-                    {bluePs.win_rate}%
-                    <span className="text-zinc-600 font-normal ml-0.5 text-[9px]">{bluePs.games}g</span>
-                  </span>
+                  <div className="flex flex-col items-center leading-tight">
+                    <span className={cn(
+                      'font-bold tabular-nums text-[11px]',
+                      blueGood ? 'text-blue-400' : 'text-zinc-500'
+                    )}>
+                      {bluePs.wins}V {bluePs.games - bluePs.wins}D
+                      <span className="text-zinc-600 font-normal ml-0.5 text-[9px]">({bluePs.games}g)</span>
+                    </span>
+                    <span className={cn(
+                      'text-[9px] tabular-nums',
+                      blueGood ? 'text-blue-400/70' : 'text-zinc-600'
+                    )}>
+                      {bluePs.win_rate}% WR
+                    </span>
+                  </div>
                 ) : (
                   <span className="text-zinc-700">-</span>
                 )}
@@ -79,15 +87,23 @@ function PlayerChampionHistoryPanelComponent({ matchups }: PlayerChampionHistory
               </div>
 
               {/* Red stats */}
-              <div className="w-16 text-center">
+              <div className="w-20 text-center">
                 {redPs ? (
-                  <span className={cn(
-                    'font-bold tabular-nums',
-                    redGood ? 'text-red-400' : 'text-zinc-500'
-                  )}>
-                    {redPs.win_rate}%
-                    <span className="text-zinc-600 font-normal ml-0.5 text-[9px]">{redPs.games}g</span>
-                  </span>
+                  <div className="flex flex-col items-center leading-tight">
+                    <span className={cn(
+                      'font-bold tabular-nums text-[11px]',
+                      redGood ? 'text-red-400' : 'text-zinc-500'
+                    )}>
+                      {redPs.wins}V {redPs.games - redPs.wins}D
+                      <span className="text-zinc-600 font-normal ml-0.5 text-[9px]">({redPs.games}g)</span>
+                    </span>
+                    <span className={cn(
+                      'text-[9px] tabular-nums',
+                      redGood ? 'text-red-400/70' : 'text-zinc-600'
+                    )}>
+                      {redPs.win_rate}% WR
+                    </span>
+                  </div>
                 ) : (
                   <span className="text-zinc-700">-</span>
                 )}
@@ -117,7 +133,7 @@ function PlayerChampionHistoryPanelComponent({ matchups }: PlayerChampionHistory
       </div>
 
       <p className="text-[8px] text-zinc-600 mt-2">
-        Win rate e partidas do jogador com o campeao selecionado
+        V = Vitorias, D = Derrotas do jogador com o campeao selecionado
       </p>
     </div>
   );

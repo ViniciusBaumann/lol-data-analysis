@@ -1828,6 +1828,55 @@ def compute_match_prediction(blue_db_id: int, red_db_id: int) -> dict | None:
         return None
 
 
+def compute_team_draft_pools(
+    blue_team_id: int, red_team_id: int
+) -> dict:
+    """Return most-played champions per position for each team.
+
+    Used in the pre-draft phase to show champion pool predictions.
+    """
+    from django.db.models import Count
+
+    from .models import PlayerMatchStats, TeamMatchStats
+
+    result: dict[str, dict] = {}
+
+    for side, team_id in [("blue", blue_team_id), ("red", red_team_id)]:
+        side_pools: dict[str, list[dict]] = {}
+        for pos in _POSITIONS:
+            champ_qs = (
+                PlayerMatchStats.objects.filter(
+                    team_id=team_id, position__iexact=pos
+                )
+                .values("champion")
+                .annotate(games=Count("id"))
+                .order_by("-games")[:5]
+            )
+
+            pool: list[dict] = []
+            for entry in champ_qs:
+                champ = entry["champion"]
+                games = entry["games"]
+                # Count wins for this champion in this position for this team
+                match_ids = PlayerMatchStats.objects.filter(
+                    team_id=team_id, position__iexact=pos, champion=champ
+                ).values_list("match_id", flat=True)
+                wins = TeamMatchStats.objects.filter(
+                    match_id__in=match_ids, team_id=team_id, is_winner=True
+                ).count()
+                win_rate = round((wins / games) * 100, 1) if games > 0 else 0
+                pool.append({
+                    "champion": champ,
+                    "games": games,
+                    "wins": wins,
+                    "win_rate": win_rate,
+                })
+            side_pools[pos] = pool
+        result[side] = side_pools
+
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
@@ -2005,6 +2054,7 @@ def get_live_games_data(minimal: bool = False) -> list[dict]:
         prediction = None
         enrichment = None
         series_games = None
+        draft_pools = None
 
         if not minimal:
             blue_db_id = match_team_to_db(
@@ -2015,6 +2065,13 @@ def get_live_games_data(minimal: bool = False) -> list[dict]:
                 red_raw.get("code", ""),
                 red_raw.get("name", ""),
             )
+
+            # Draft pool predictions (pre-draft phase)
+            if not draft and blue_db_id and red_db_id:
+                try:
+                    draft_pools = compute_team_draft_pools(blue_db_id, red_db_id)
+                except Exception:
+                    logger.exception("compute_team_draft_pools failed for game %s", game_id)
 
             if draft:
                 try:
@@ -2156,6 +2213,7 @@ def get_live_games_data(minimal: bool = False) -> list[dict]:
             "prediction": prediction,
             "enrichment": enrichment,
             "series_games": series_games,
+            "draft_pools": draft_pools,
         })
 
     # Update cache only for full requests
@@ -2287,6 +2345,14 @@ def get_live_match_data(match_id: str) -> dict | None:
     # Match teams to DB
     blue_db_id = match_team_to_db(blue_raw.get("code", ""), blue_raw.get("name", ""))
     red_db_id = match_team_to_db(red_raw.get("code", ""), red_raw.get("name", ""))
+
+    # Draft pool predictions (pre-draft phase)
+    draft_pools = None
+    if not draft and blue_db_id and red_db_id:
+        try:
+            draft_pools = compute_team_draft_pools(blue_db_id, red_db_id)
+        except Exception:
+            logger.exception("compute_team_draft_pools failed for match %s", match_id)
 
     # Run predictions
     prediction = None
@@ -2430,4 +2496,5 @@ def get_live_match_data(match_id: str) -> dict | None:
         "prediction": prediction,
         "enrichment": enrichment,
         "series_games": series_games,
+        "draft_pools": draft_pools,
     }

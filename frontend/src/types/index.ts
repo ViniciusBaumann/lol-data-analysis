@@ -711,6 +711,18 @@ export interface SeriesGame {
   players: SeriesGamePlayers | null;
 }
 
+export interface DraftPoolChampion {
+  champion: string;
+  games: number;
+  wins: number;
+  win_rate: number;
+}
+
+export interface DraftPools {
+  blue: Record<string, DraftPoolChampion[]>;
+  red: Record<string, DraftPoolChampion[]>;
+}
+
 export interface LiveGame {
   match_id: string;
   game_id: string | null;
@@ -729,6 +741,7 @@ export interface LiveGame {
   prediction: LiveGamePrediction | null;
   enrichment: LiveGameEnrichment | null;
   series_games: SeriesGame[] | null;
+  draft_pools: DraftPools | null;
 }
 
 export interface LiveGamesResponse {
