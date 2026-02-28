@@ -640,6 +640,12 @@ class LiveMatchSnapshot(models.Model):
         verbose_name="Dados dos Jogadores",
         help_text="Dict com {'blue': [...], 'red': [...]} jogadores.",
     )
+    prediction_data = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="Dados de Predicao",
+        help_text="Dict com predicoes do modelo ML no momento do jogo ao vivo.",
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name="Criado em",

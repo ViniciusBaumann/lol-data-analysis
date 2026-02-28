@@ -15,6 +15,7 @@ import {
   ArrowUp,
   ArrowDown,
   Minus,
+  Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSeriesAnalysis } from '@/hooks/useSeriesAnalysis';
@@ -652,6 +653,47 @@ function ObjectiveForecastSection({ forecast, blueTeamCode, redTeamCode }: Objec
           );
         })}
       </div>
+
+      {/* Game Time Forecast */}
+      {forecast.gameTime && (
+        <div className="mt-2 bg-zinc-800/40 rounded-lg p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Clock size={14} className="text-teal-400" />
+              <span className="text-[10px] text-zinc-400 uppercase font-semibold">Tempo de Jogo</span>
+            </div>
+            {forecast.gameTime.seriesTrend !== 0 && (
+              <div className={cn(
+                'flex items-center gap-0.5 text-[9px] font-bold',
+                forecast.gameTime.seriesTrend > 0 ? 'text-emerald-400' : 'text-amber-400',
+              )}>
+                {forecast.gameTime.seriesTrend > 0 ? <ArrowUp size={9} /> : <ArrowDown size={9} />}
+                {forecast.gameTime.seriesTrend > 0 ? '+' : ''}{forecast.gameTime.seriesTrend} min
+              </div>
+            )}
+            {forecast.gameTime.seriesTrend === 0 && (
+              <div className="flex items-center gap-0.5 text-[9px] text-zinc-600">
+                <Minus size={9} />
+                <span>estavel</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-4 mt-2">
+            <div className="flex items-baseline gap-1">
+              <span className="text-xl font-black text-zinc-100 tabular-nums">{forecast.gameTime.predicted}</span>
+              <span className="text-[10px] text-zinc-500">min</span>
+            </div>
+            <span className="text-[9px] text-zinc-600 tabular-nums">
+              {forecast.gameTime.range[0]} - {forecast.gameTime.range[1]}
+            </span>
+            {forecast.gameTime.seriesAvg != null && (
+              <span className="text-[9px] text-zinc-600 ml-auto">
+                Serie: <span className="text-zinc-400 font-bold">{forecast.gameTime.seriesAvg} min</span>
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

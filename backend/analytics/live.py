@@ -75,6 +75,7 @@ def _save_live_snapshot(
     red_db_id: int | None = None,
     match_date: datetime | None = None,
     force: bool = False,
+    prediction: dict | None = None,
 ) -> None:
     """Save or update a live game snapshot to the database.
 
@@ -110,6 +111,7 @@ def _save_live_snapshot(
                 "draft_data": draft,
                 "final_stats": stats,
                 "players_data": players,
+                "prediction_data": prediction,
             },
         )
         _snapshot_last_saved[game_id] = now
@@ -132,6 +134,7 @@ def _load_live_snapshot(game_id: str) -> dict | None:
                 "draft": snap.draft_data,
                 "final_stats": snap.final_stats,
                 "players": snap.players_data,
+                "prediction": snap.prediction_data,
             }
     except Exception:
         logger.exception("Failed to load snapshot for game %s", game_id)
@@ -1346,6 +1349,7 @@ def _build_series_games(
             "draft": None,
             "final_stats": None,
             "players": None,
+            "saved_prediction": None,
         }
 
         # Apply pre-fetched data for completed games
@@ -1367,6 +1371,9 @@ def _build_series_games(
                 entry["players"] = cached.get("players") or entry["players"]
                 if entry["draft"] is None and cached.get("draft"):
                     entry["draft"] = cached["draft"]
+                cached_prediction = cached.get("prediction")
+                if cached_prediction:
+                    entry["saved_prediction"] = cached_prediction
                 # Persist to DB so it survives restarts
                 _save_live_snapshot(
                     game_id,
@@ -1376,6 +1383,7 @@ def _build_series_games(
                     blue_team_code=blue_code,
                     red_team_code=red_code,
                     force=True,
+                    prediction=cached_prediction,
                 )
                 logger.info(
                     "Used in-memory cache for completed game %s (%s vs %s)",
@@ -1390,6 +1398,8 @@ def _build_series_games(
                     entry["players"] = snap_data.get("players") or entry["players"]
                     if entry["draft"] is None and snap_data.get("draft"):
                         entry["draft"] = snap_data["draft"]
+                    if snap_data.get("prediction"):
+                        entry["saved_prediction"] = snap_data["prediction"]
                     logger.info(
                         "Used DB snapshot for completed game %s (%s vs %s)",
                         game_id, blue_code, red_code,
@@ -2193,7 +2203,12 @@ def get_live_games_data(minimal: bool = False) -> list[dict]:
                 blue_db_id=blue_db_id,
                 red_db_id=red_db_id,
                 match_date=match_dt,
+                prediction=prediction,
             )
+
+        # Update in-memory cache with prediction so _build_series_games can use it
+        if not minimal and game_id and game_id in _live_game_state_cache:
+            _live_game_state_cache[game_id]["prediction"] = prediction
 
         games.append({
             "match_id": ev["match_id"],
@@ -2429,7 +2444,12 @@ def get_live_match_data(match_id: str) -> dict | None:
             blue_db_id=blue_db_id,
             red_db_id=red_db_id,
             match_date=match_dt,
+            prediction=prediction,
         )
+
+    # Update in-memory cache with prediction so _build_series_games can use it
+    if current_game_id and current_game_id in _live_game_state_cache:
+        _live_game_state_cache[current_game_id]["prediction"] = prediction
 
     # Build series games info (with draft/stats for completed games)
     strategy = match_data.get("strategy", {})

@@ -16,6 +16,7 @@ import type {
   TeamContextStats,
   ObjectiveForecast,
   ObjectiveForecastEntry,
+  GameTimeForecast,
 } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -657,11 +658,46 @@ export function useSeriesAnalysis(game: LiveGame): SeriesAnalysisResult {
       };
     });
 
-    return { gameNumber: nextGameNum, entries };
+    // Game time forecast
+    const matchPred = game.enrichment?.match_prediction;
+    let gameTime: GameTimeForecast | null = null;
+
+    if (matchPred?.game_time != null) {
+      // Compute series average game time from completed games
+      const completed = getCompletedGames(series);
+      const gameTimes = completed
+        .map(sg => sg.final_stats?.game_length)
+        .filter((gl): gl is number => gl != null && gl > 0)
+        .map(gl => gl / 60); // convert seconds to minutes
+
+      const seriesAvg = gameTimes.length > 0
+        ? Math.round((gameTimes.reduce((a, b) => a + b, 0) / gameTimes.length) * 10) / 10
+        : null;
+
+      // Trend: are games getting longer or shorter?
+      let seriesTrend = 0;
+      if (gameTimes.length >= 2) {
+        seriesTrend = Math.round((gameTimes[gameTimes.length - 1] - gameTimes[0]) * 10) / 10;
+      }
+
+      const range: [number, number] = matchPred.game_time_range
+        ? matchPred.game_time_range
+        : [Math.round((matchPred.game_time - 3) * 10) / 10, Math.round((matchPred.game_time + 3) * 10) / 10];
+
+      gameTime = {
+        predicted: Math.round(matchPred.game_time * 10) / 10,
+        range,
+        seriesAvg,
+        seriesTrend,
+      };
+    }
+
+    return { gameNumber: nextGameNum, entries, gameTime };
   }, [
     seriesTotals,
     objectiveDiffs,
     game.enrichment?.team_context,
+    game.enrichment?.match_prediction,
     game.prediction?.predictions,
     momentum.lastWinnerCode,
     series,

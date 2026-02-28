@@ -699,6 +699,12 @@ export interface SeriesGamePlayers {
   red: SeriesGamePlayer[];
 }
 
+export interface SavedPrediction {
+  predictions: DraftPredictions | null;
+  composition?: CompositionAnalysis | null;
+  match_prediction?: MatchPredictionEnriched | null;
+}
+
 export interface SeriesGame {
   number: number;
   game_id: string | null;
@@ -709,6 +715,7 @@ export interface SeriesGame {
   draft: LiveGameDraft | null;
   final_stats: SeriesGameStats | null;
   players: SeriesGamePlayers | null;
+  saved_prediction?: SavedPrediction | null;
 }
 
 export interface DraftPoolChampion {
@@ -953,10 +960,23 @@ export interface ObjectiveForecastEntry {
   redExpected: number;
 }
 
+/** Game time forecast for the next map */
+export interface GameTimeForecast {
+  /** Predicted game time in minutes */
+  predicted: number;
+  /** Range [low, high] in minutes */
+  range: [number, number];
+  /** Average game time across completed series games (in minutes) */
+  seriesAvg: number | null;
+  /** Trend: positive = games getting longer, negative = shorter */
+  seriesTrend: number;
+}
+
 /** Full objective forecast for the next map */
 export interface ObjectiveForecast {
   gameNumber: number;
   entries: ObjectiveForecastEntry[];
+  gameTime: GameTimeForecast | null;
 }
 
 export interface SeriesAnalysisResult {

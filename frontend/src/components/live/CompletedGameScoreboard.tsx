@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { cn } from '@/lib/utils';
-import { SeriesGame, SeriesGamePlayer, LiveGameDraft } from '@/types';
-import { Skull, TowerControl, Flame, Crown, Coins, Castle, Trophy } from 'lucide-react';
+import { SeriesGame, SeriesGamePlayer, LiveGameDraft, SavedPrediction, SeriesGameStats } from '@/types';
+import { Skull, TowerControl, Flame, Crown, Coins, Castle, Trophy, Target, Clock, CheckCircle, XCircle } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -385,6 +385,199 @@ function PlayerRow({ bluePlayer, redPlayer, blueChampion, redChampion, position,
 }
 
 // ---------------------------------------------------------------------------
+// Prediction vs Result
+// ---------------------------------------------------------------------------
+
+function ComparisonCard({
+  label,
+  icon,
+  predicted,
+  actual,
+  range,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  predicted: number | undefined | null;
+  actual: number;
+  range?: [number, number] | null;
+}) {
+  if (predicted == null) return null;
+  const diff = actual - predicted;
+  const inRange = range ? actual >= range[0] && actual <= range[1] : Math.abs(diff) <= 2;
+  return (
+    <div className="flex flex-col items-center gap-1 px-3 py-2 bg-zinc-800/50 rounded-lg min-w-[90px]">
+      {icon}
+      <span className="text-[10px] text-zinc-500 uppercase font-semibold">{label}</span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-zinc-400">{Math.round(predicted)}</span>
+        <span className="text-[10px] text-zinc-600">→</span>
+        <span className="text-xs font-bold text-zinc-200">{actual}</span>
+      </div>
+      <span className={cn(
+        'text-[10px] font-bold px-1.5 py-0.5 rounded',
+        inRange ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+      )}>
+        {diff > 0 ? '+' : ''}{Math.round(diff)}
+      </span>
+    </div>
+  );
+}
+
+function PredictionVsResult({
+  savedPrediction,
+  stats,
+  winner,
+  blueCode,
+  redCode,
+  gameDuration,
+}: {
+  savedPrediction: SavedPrediction;
+  stats: SeriesGameStats;
+  winner: 'blue' | 'red';
+  blueCode: string;
+  redCode: string;
+  gameDuration: number | null | undefined;
+}) {
+  const preds = savedPrediction.predictions;
+  const matchPred = savedPrediction.match_prediction;
+  const comp = savedPrediction.composition;
+
+  // Win prediction accuracy
+  const predictedWinner = preds
+    ? (preds.blue_win_prob >= 50 ? 'blue' : 'red')
+    : matchPred
+      ? ((matchPred.blue_win_prob ?? 0) >= 50 ? 'blue' : 'red')
+      : null;
+  const winProb = preds
+    ? Math.max(preds.blue_win_prob, preds.red_win_prob)
+    : matchPred
+      ? Math.max(matchPred.blue_win_prob ?? 0, matchPred.red_win_prob ?? 0)
+      : null;
+  const gotItRight = predictedWinner === winner;
+
+  const totalKills = stats.blue_kills + stats.red_kills;
+  const totalTowers = stats.blue_towers + stats.red_towers;
+  const totalDragons = stats.blue_dragons + stats.red_dragons;
+  const totalBarons = stats.blue_barons + stats.red_barons;
+
+  // Game time comparison
+  const predictedTime = matchPred?.game_time;
+  const timeRange = matchPred?.game_time_range;
+  const actualTimeMin = gameDuration ? gameDuration / 60 : null;
+
+  // Composition tags
+  const getTopTags = (scores: Record<string, number> | undefined | null): string[] => {
+    if (!scores) return [];
+    const entries = Object.entries(scores).filter(([k]) =>
+      !['ap_count', 'ad_count'].includes(k)
+    );
+    return entries.sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) =>
+      k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    );
+  };
+
+  const blueTags = comp ? getTopTags(comp.blue as unknown as Record<string, number>) : [];
+  const redTags = comp ? getTopTags(comp.red as unknown as Record<string, number>) : [];
+
+  return (
+    <div className="border-t border-zinc-800 px-4 py-3">
+      <div className="flex items-center gap-2 mb-3">
+        <Target size={14} className="text-violet-400" />
+        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+          Previsao vs Resultado
+        </span>
+      </div>
+
+      {/* Win prediction badge */}
+      {predictedWinner && winProb && (
+        <div className="flex items-center gap-2 mb-3">
+          {gotItRight ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/15 border border-emerald-500/30 rounded-md">
+              <CheckCircle size={13} className="text-emerald-400" />
+              <span className="text-xs font-bold text-emerald-400">Acertou</span>
+              <span className="text-[10px] text-emerald-400/70">
+                ({predictedWinner === 'blue' ? blueCode : redCode} {winProb.toFixed(1)}%)
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-500/15 border border-red-500/30 rounded-md">
+              <XCircle size={13} className="text-red-400" />
+              <span className="text-xs font-bold text-red-400">Errou</span>
+              <span className="text-[10px] text-red-400/70">
+                (Previu {predictedWinner === 'blue' ? blueCode : redCode} {winProb.toFixed(1)}%)
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Composition tags */}
+      {(blueTags.length > 0 || redTags.length > 0) && (
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-wrap gap-1">
+            {blueTags.map(tag => (
+              <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-blue-500/15 text-blue-400 rounded font-medium">
+                {tag}
+              </span>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1 justify-end">
+            {redTags.map(tag => (
+              <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-red-500/15 text-red-400 rounded font-medium">
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Stats comparison grid */}
+      {preds && (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <ComparisonCard
+            label="Kills"
+            icon={<Skull size={14} className="text-red-400" />}
+            predicted={preds.total_kills}
+            actual={totalKills}
+            range={preds.kills_range}
+          />
+          <ComparisonCard
+            label="Torres"
+            icon={<TowerControl size={14} className="text-sky-400" />}
+            predicted={preds.total_towers}
+            actual={totalTowers}
+            range={preds.towers_range}
+          />
+          <ComparisonCard
+            label="Dragons"
+            icon={<Flame size={14} className="text-orange-400" />}
+            predicted={preds.total_dragons}
+            actual={totalDragons}
+            range={preds.dragons_range}
+          />
+          <ComparisonCard
+            label="Barons"
+            icon={<Crown size={14} className="text-purple-400" />}
+            predicted={preds.total_barons}
+            actual={totalBarons}
+            range={preds.barons_range}
+          />
+          {predictedTime != null && actualTimeMin != null && (
+            <ComparisonCard
+              label="Tempo"
+              icon={<Clock size={14} className="text-zinc-400" />}
+              predicted={predictedTime}
+              actual={Math.round(actualTimeMin * 10) / 10}
+              range={timeRange}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
 
@@ -569,6 +762,18 @@ function CompletedGameScoreboardComponent({ game, ddragonVersion }: CompletedGam
             Dados do jogo nao disponiveis.
           </p>
         </div>
+      )}
+
+      {/* Prediction vs Result */}
+      {game.saved_prediction && hasStats && (
+        <PredictionVsResult
+          savedPrediction={game.saved_prediction}
+          stats={stats}
+          winner={winner}
+          blueCode={game.blue_team.code}
+          redCode={game.red_team.code}
+          gameDuration={stats.game_length}
+        />
       )}
     </div>
   );
