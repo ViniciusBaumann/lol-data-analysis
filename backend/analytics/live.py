@@ -870,7 +870,8 @@ def fetch_game_data(game_id: str) -> dict:
     if merged_from_cache:
         logger.debug("Merged cached state for game %s", game_id)
 
-    # Update cache with merged result
+    # Update cache with merged result (preserve prediction from previous cycle)
+    existing_prediction = _live_game_state_cache.get(game_id, {}).get("prediction")
     _live_game_state_cache[game_id] = {
         "draft": result["draft"],
         "live_stats": result["live_stats"],
@@ -878,6 +879,7 @@ def fetch_game_data(game_id: str) -> dict:
         "patch_version": result["patch_version"],
         "ddragon_version": result["ddragon_version"],
         "team_ids": result["team_ids"],
+        "prediction": existing_prediction,
         "last_updated": datetime.now(timezone.utc),
     }
 
@@ -1404,6 +1406,20 @@ def _build_series_games(
                         "Used DB snapshot for completed game %s (%s vs %s)",
                         game_id, blue_code, red_code,
                     )
+
+        # Recover saved prediction for completed games (independent of stats fallback)
+        # When Livestats returns stats successfully, the fallback paths above are skipped,
+        # but we still need the prediction that was saved during live polling.
+        if state == "completed" and game_id and entry["saved_prediction"] is None:
+            # 1) Try in-memory cache
+            cached = _live_game_state_cache.get(game_id)
+            if cached and cached.get("prediction"):
+                entry["saved_prediction"] = cached["prediction"]
+            else:
+                # 2) Try DB snapshot
+                snap_data = _load_live_snapshot(game_id)
+                if snap_data and snap_data.get("prediction"):
+                    entry["saved_prediction"] = snap_data["prediction"]
 
         series.append(entry)
 

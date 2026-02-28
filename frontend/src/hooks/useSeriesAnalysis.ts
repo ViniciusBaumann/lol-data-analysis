@@ -666,7 +666,7 @@ export function useSeriesAnalysis(game: LiveGame): SeriesAnalysisResult {
       // Compute series average game time from completed games
       const completed = getCompletedGames(series);
       const gameTimes = completed
-        .map(sg => sg.final_stats?.game_length)
+        .map(sg => sg.final_stats?.game_length ?? sg.final_stats?.game_time_sec)
         .filter((gl): gl is number => gl != null && gl > 0)
         .map(gl => gl / 60); // convert seconds to minutes
 

@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { cn } from '@/lib/utils';
-import { SeriesGame, SeriesGamePlayer, LiveGameDraft, SavedPrediction, SeriesGameStats } from '@/types';
-import { Skull, TowerControl, Flame, Crown, Coins, Castle, Trophy, Target, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { SeriesGame, SeriesGamePlayer, LiveGameDraft, SavedPrediction, SeriesGameStats, CompositionScores } from '@/types';
+import { Skull, TowerControl, Flame, Crown, Coins, Castle, Trophy, Target, Clock, CheckCircle, XCircle, Swords, ArrowRight } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -388,39 +388,21 @@ function PlayerRow({ bluePlayer, redPlayer, blueChampion, redChampion, position,
 // Prediction vs Result
 // ---------------------------------------------------------------------------
 
-function ComparisonCard({
-  label,
-  icon,
-  predicted,
-  actual,
-  range,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  predicted: number | undefined | null;
-  actual: number;
-  range?: [number, number] | null;
-}) {
-  if (predicted == null) return null;
-  const diff = actual - predicted;
-  const inRange = range ? actual >= range[0] && actual <= range[1] : Math.abs(diff) <= 2;
-  return (
-    <div className="flex flex-col items-center gap-1 px-3 py-2 bg-zinc-800/50 rounded-lg min-w-[90px]">
-      {icon}
-      <span className="text-[10px] text-zinc-500 uppercase font-semibold">{label}</span>
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs text-zinc-400">{Math.round(predicted)}</span>
-        <span className="text-[10px] text-zinc-600">→</span>
-        <span className="text-xs font-bold text-zinc-200">{actual}</span>
-      </div>
-      <span className={cn(
-        'text-[10px] font-bold px-1.5 py-0.5 rounded',
-        inRange ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
-      )}>
-        {diff > 0 ? '+' : ''}{Math.round(diff)}
-      </span>
-    </div>
-  );
+const COMP_LABELS: Record<string, string> = {
+  early_game: 'Early',
+  scaling: 'Scaling',
+  teamfight: 'Teamfight',
+  splitpush: 'Split',
+  poke: 'Poke',
+  engage: 'Engage',
+  pick: 'Pick',
+  siege: 'Siege',
+};
+
+function formatTime(minutes: number): string {
+  const m = Math.floor(minutes);
+  const s = Math.round((minutes - m) * 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 function PredictionVsResult({
@@ -442,137 +424,338 @@ function PredictionVsResult({
   const matchPred = savedPrediction.match_prediction;
   const comp = savedPrediction.composition;
 
-  // Win prediction accuracy
-  const predictedWinner = preds
-    ? (preds.blue_win_prob >= 50 ? 'blue' : 'red')
-    : matchPred
-      ? ((matchPred.blue_win_prob ?? 0) >= 50 ? 'blue' : 'red')
-      : null;
-  const winProb = preds
-    ? Math.max(preds.blue_win_prob, preds.red_win_prob)
-    : matchPred
-      ? Math.max(matchPred.blue_win_prob ?? 0, matchPred.red_win_prob ?? 0)
-      : null;
+  // Win probabilities
+  const blueWinProb = preds?.blue_win_prob ?? matchPred?.blue_win_prob ?? null;
+  const redWinProb = preds?.red_win_prob ?? matchPred?.red_win_prob ?? null;
+  const predictedWinner = blueWinProb != null && redWinProb != null
+    ? (blueWinProb >= redWinProb ? 'blue' : 'red')
+    : null;
   const gotItRight = predictedWinner === winner;
 
+  // Actual totals
   const totalKills = stats.blue_kills + stats.red_kills;
   const totalTowers = stats.blue_towers + stats.red_towers;
   const totalDragons = stats.blue_dragons + stats.red_dragons;
   const totalBarons = stats.blue_barons + stats.red_barons;
-
-  // Game time comparison
-  const predictedTime = matchPred?.game_time;
-  const timeRange = matchPred?.game_time_range;
   const actualTimeMin = gameDuration ? gameDuration / 60 : null;
 
-  // Composition tags
-  const getTopTags = (scores: Record<string, number> | undefined | null): string[] => {
-    if (!scores) return [];
-    const entries = Object.entries(scores).filter(([k]) =>
-      !['ap_count', 'ad_count'].includes(k)
-    );
-    return entries.sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) =>
-      k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-    );
-  };
+  // Objective rows
+  const objectives: {
+    icon: React.ReactNode;
+    label: string;
+    predicted: number | null;
+    actual: number;
+    range?: [number, number];
+  }[] = [];
 
-  const blueTags = comp ? getTopTags(comp.blue as unknown as Record<string, number>) : [];
-  const redTags = comp ? getTopTags(comp.red as unknown as Record<string, number>) : [];
+  if (preds) {
+    objectives.push(
+      {
+        icon: <Skull size={13} className="text-red-400" />,
+        label: 'Kills',
+        predicted: preds.total_kills,
+        actual: totalKills,
+        range: preds.kills_range,
+      },
+      {
+        icon: <TowerControl size={13} className="text-sky-400" />,
+        label: 'Torres',
+        predicted: preds.total_towers,
+        actual: totalTowers,
+        range: preds.towers_range,
+      },
+      {
+        icon: <Flame size={13} className="text-orange-400" />,
+        label: 'Dragoes',
+        predicted: preds.total_dragons,
+        actual: totalDragons,
+        range: preds.dragons_range,
+      },
+      {
+        icon: <Crown size={13} className="text-purple-400" />,
+        label: 'Baroes',
+        predicted: preds.total_barons,
+        actual: totalBarons,
+        range: preds.barons_range,
+      },
+    );
+  }
+
+  const predictedTime = matchPred?.game_time ?? null;
+  const timeRange = matchPred?.game_time_range;
+
+  // Composition analysis
+  const getCompEntries = (scores: CompositionScores | null | undefined) => {
+    if (!scores) return [];
+    return (Object.entries(COMP_LABELS) as [keyof typeof COMP_LABELS, string][])
+      .map(([key, label]) => ({ key, label, value: (scores as unknown as Record<string, number>)[key] ?? 0 }))
+      .sort((a, b) => b.value - a.value);
+  };
+  const blueComp = comp ? getCompEntries(comp.blue) : [];
+  const redComp = comp ? getCompEntries(comp.red) : [];
+
+  // Count how many objective predictions were in range
+  const inRangeCount = objectives.filter(o => {
+    if (o.predicted == null) return false;
+    if (o.range) return o.actual >= o.range[0] && o.actual <= o.range[1];
+    return Math.abs(o.actual - o.predicted) <= 2;
+  }).length;
+  const totalPredicted = objectives.filter(o => o.predicted != null).length;
 
   return (
-    <div className="border-t border-zinc-800 px-4 py-3">
-      <div className="flex items-center gap-2 mb-3">
-        <Target size={14} className="text-violet-400" />
-        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
-          Previsao vs Resultado
-        </span>
+    <div className="border-t border-zinc-800">
+      {/* Section header */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-800/30">
+        <div className="flex items-center gap-2">
+          <Target size={14} className="text-violet-400" />
+          <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+            Previsao vs Resultado
+          </span>
+        </div>
+        {totalPredicted > 0 && (
+          <span className="text-[10px] text-zinc-500">
+            {inRangeCount}/{totalPredicted} dentro do range
+          </span>
+        )}
       </div>
 
-      {/* Win prediction badge */}
-      {predictedWinner && winProb && (
-        <div className="flex items-center gap-2 mb-3">
-          {gotItRight ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/15 border border-emerald-500/30 rounded-md">
-              <CheckCircle size={13} className="text-emerald-400" />
-              <span className="text-xs font-bold text-emerald-400">Acertou</span>
-              <span className="text-[10px] text-emerald-400/70">
-                ({predictedWinner === 'blue' ? blueCode : redCode} {winProb.toFixed(1)}%)
+      <div className="px-4 py-3 space-y-3">
+        {/* ── Win Prediction ── */}
+        {blueWinProb != null && redWinProb != null && (
+          <div className="bg-zinc-800/40 rounded-lg p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] text-zinc-500 uppercase font-semibold">Previsao de Vitoria</span>
+              {predictedWinner && (
+                gotItRight ? (
+                  <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500/15 border border-emerald-500/30 rounded">
+                    <CheckCircle size={11} className="text-emerald-400" />
+                    <span className="text-[10px] font-bold text-emerald-400">Acertou</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 px-2 py-0.5 bg-red-500/15 border border-red-500/30 rounded">
+                    <XCircle size={11} className="text-red-400" />
+                    <span className="text-[10px] font-bold text-red-400">Errou</span>
+                  </div>
+                )
+              )}
+            </div>
+            {/* Probability bar */}
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className={cn(
+                'text-sm font-black tabular-nums w-14 text-right',
+                winner === 'blue' ? 'text-blue-400' : 'text-blue-400/60',
+              )}>
+                {blueWinProb.toFixed(1)}%
+              </span>
+              <div className="flex-1 h-3 rounded-full overflow-hidden flex bg-zinc-700">
+                <div
+                  className={cn(
+                    'h-full transition-all duration-300',
+                    winner === 'blue'
+                      ? 'bg-gradient-to-r from-blue-600 to-blue-400'
+                      : 'bg-blue-500/40',
+                  )}
+                  style={{ width: `${blueWinProb}%` }}
+                />
+                <div
+                  className={cn(
+                    'h-full transition-all duration-300',
+                    winner === 'red'
+                      ? 'bg-gradient-to-r from-red-400 to-red-600'
+                      : 'bg-red-500/40',
+                  )}
+                  style={{ width: `${redWinProb}%` }}
+                />
+              </div>
+              <span className={cn(
+                'text-sm font-black tabular-nums w-14',
+                winner === 'red' ? 'text-red-400' : 'text-red-400/60',
+              )}>
+                {redWinProb.toFixed(1)}%
               </span>
             </div>
-          ) : (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-500/15 border border-red-500/30 rounded-md">
-              <XCircle size={13} className="text-red-400" />
-              <span className="text-xs font-bold text-red-400">Errou</span>
-              <span className="text-[10px] text-red-400/70">
-                (Previu {predictedWinner === 'blue' ? blueCode : redCode} {winProb.toFixed(1)}%)
+            <div className="flex items-center justify-between">
+              <span className={cn('text-[10px] font-bold', winner === 'blue' ? 'text-blue-400' : 'text-zinc-600')}>
+                {blueCode} {winner === 'blue' && <Trophy className="inline h-3 w-3 text-yellow-500" />}
+              </span>
+              <span className="text-[9px] text-zinc-600">
+                Previu {predictedWinner === 'blue' ? blueCode : redCode}
+                {' · '}Venceu {winner === 'blue' ? blueCode : redCode}
+              </span>
+              <span className={cn('text-[10px] font-bold', winner === 'red' ? 'text-red-400' : 'text-zinc-600')}>
+                {winner === 'red' && <Trophy className="inline h-3 w-3 text-yellow-500" />} {redCode}
               </span>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Composition tags */}
-      {(blueTags.length > 0 || redTags.length > 0) && (
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex flex-wrap gap-1">
-            {blueTags.map(tag => (
-              <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-blue-500/15 text-blue-400 rounded font-medium">
-                {tag}
-              </span>
-            ))}
           </div>
-          <div className="flex flex-wrap gap-1 justify-end">
-            {redTags.map(tag => (
-              <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-red-500/15 text-red-400 rounded font-medium">
-                {tag}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+        )}
 
-      {/* Stats comparison grid */}
-      {preds && (
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <ComparisonCard
-            label="Kills"
-            icon={<Skull size={14} className="text-red-400" />}
-            predicted={preds.total_kills}
-            actual={totalKills}
-            range={preds.kills_range}
-          />
-          <ComparisonCard
-            label="Torres"
-            icon={<TowerControl size={14} className="text-sky-400" />}
-            predicted={preds.total_towers}
-            actual={totalTowers}
-            range={preds.towers_range}
-          />
-          <ComparisonCard
-            label="Dragons"
-            icon={<Flame size={14} className="text-orange-400" />}
-            predicted={preds.total_dragons}
-            actual={totalDragons}
-            range={preds.dragons_range}
-          />
-          <ComparisonCard
-            label="Barons"
-            icon={<Crown size={14} className="text-purple-400" />}
-            predicted={preds.total_barons}
-            actual={totalBarons}
-            range={preds.barons_range}
-          />
-          {predictedTime != null && actualTimeMin != null && (
-            <ComparisonCard
-              label="Tempo"
-              icon={<Clock size={14} className="text-zinc-400" />}
-              predicted={predictedTime}
-              actual={Math.round(actualTimeMin * 10) / 10}
-              range={timeRange}
-            />
-          )}
-        </div>
-      )}
+        {/* ── Objectives Table ── */}
+        {objectives.length > 0 && (
+          <div className="bg-zinc-800/40 rounded-lg overflow-hidden">
+            {/* Table header */}
+            <div className="grid grid-cols-[1fr_80px_40px_80px_56px] gap-1 px-3 py-1.5 bg-zinc-800/60 border-b border-zinc-700/50">
+              <span className="text-[9px] text-zinc-500 uppercase font-semibold">Objetivo</span>
+              <span className="text-[9px] text-zinc-500 uppercase font-semibold text-center">Previsto</span>
+              <span className="text-[9px] text-zinc-500 uppercase font-semibold text-center" />
+              <span className="text-[9px] text-zinc-500 uppercase font-semibold text-center">Real</span>
+              <span className="text-[9px] text-zinc-500 uppercase font-semibold text-right">Erro</span>
+            </div>
+            {/* Rows */}
+            {objectives.map((obj, i) => {
+              if (obj.predicted == null) return null;
+              const diff = obj.actual - obj.predicted;
+              const inRange = obj.range
+                ? obj.actual >= obj.range[0] && obj.actual <= obj.range[1]
+                : Math.abs(diff) <= 2;
+              return (
+                <div
+                  key={i}
+                  className="grid grid-cols-[1fr_80px_40px_80px_56px] gap-1 px-3 py-2 border-b border-zinc-800/50 last:border-0 items-center"
+                >
+                  <div className="flex items-center gap-1.5">
+                    {obj.icon}
+                    <span className="text-xs text-zinc-300 font-medium">{obj.label}</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="text-sm font-bold text-zinc-200 tabular-nums">
+                      {obj.predicted % 1 === 0 ? obj.predicted : obj.predicted.toFixed(1)}
+                    </span>
+                    {obj.range && (
+                      <p className="text-[9px] text-zinc-600 tabular-nums">{obj.range[0]}–{obj.range[1]}</p>
+                    )}
+                  </div>
+                  <div className="flex justify-center">
+                    <ArrowRight size={12} className="text-zinc-600" />
+                  </div>
+                  <div className="text-center">
+                    <span className="text-sm font-black text-zinc-100 tabular-nums">{obj.actual}</span>
+                  </div>
+                  <div className="flex justify-end">
+                    <span className={cn(
+                      'text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded',
+                      inRange
+                        ? 'bg-emerald-500/15 text-emerald-400'
+                        : 'bg-red-500/15 text-red-400',
+                    )}>
+                      {diff > 0 ? '+' : ''}{diff % 1 === 0 ? diff : diff.toFixed(1)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+            {/* Game time row */}
+            {(predictedTime != null || actualTimeMin != null) && (
+              <div className="grid grid-cols-[1fr_80px_40px_80px_56px] gap-1 px-3 py-2 border-t border-zinc-700/50 items-center">
+                <div className="flex items-center gap-1.5">
+                  <Clock size={13} className="text-teal-400" />
+                  <span className="text-xs text-zinc-300 font-medium">Tempo</span>
+                </div>
+                <div className="text-center">
+                  {predictedTime != null ? (
+                    <>
+                      <span className="text-sm font-bold text-zinc-200 tabular-nums">
+                        {formatTime(predictedTime)}
+                      </span>
+                      {timeRange && (
+                        <p className="text-[9px] text-zinc-600 tabular-nums">{formatTime(timeRange[0])}–{formatTime(timeRange[1])}</p>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-[10px] text-zinc-600">—</span>
+                  )}
+                </div>
+                <div className="flex justify-center">
+                  <ArrowRight size={12} className="text-zinc-600" />
+                </div>
+                <div className="text-center">
+                  {actualTimeMin != null ? (
+                    <span className="text-sm font-black text-zinc-100 tabular-nums">
+                      {formatTime(actualTimeMin)}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-zinc-600">—</span>
+                  )}
+                </div>
+                <div className="flex justify-end">
+                  {predictedTime != null && actualTimeMin != null ? (
+                    (() => {
+                      const diff = actualTimeMin - predictedTime;
+                      const inRange = timeRange
+                        ? actualTimeMin >= timeRange[0] && actualTimeMin <= timeRange[1]
+                        : Math.abs(diff) <= 3;
+                      return (
+                        <span className={cn(
+                          'text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded',
+                          inRange
+                            ? 'bg-emerald-500/15 text-emerald-400'
+                            : 'bg-red-500/15 text-red-400',
+                        )}>
+                          {diff > 0 ? '+' : ''}{diff.toFixed(1)}m
+                        </span>
+                      );
+                    })()
+                  ) : null}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Composition Analysis ── */}
+        {blueComp.length > 0 && redComp.length > 0 && (
+          <div className="bg-zinc-800/40 rounded-lg p-3">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Swords size={13} className="text-amber-400" />
+              <span className="text-[10px] text-zinc-500 uppercase font-semibold">Perfil de Composicao</span>
+            </div>
+            <div className="grid grid-cols-[1fr_40px_1fr] gap-x-2 gap-y-0.5">
+              {/* Labels row */}
+              <span className="text-[9px] font-bold text-blue-400 text-right">{blueCode}</span>
+              <span />
+              <span className="text-[9px] font-bold text-red-400">{redCode}</span>
+              {/* Score bars */}
+              {Object.entries(COMP_LABELS).map(([key, label]) => {
+                const bVal = (comp!.blue as unknown as Record<string, number>)[key] ?? 0;
+                const rVal = (comp!.red as unknown as Record<string, number>)[key] ?? 0;
+                const maxVal = Math.max(bVal, rVal, 1);
+                return (
+                  <div key={key} className="contents">
+                    <div className="flex items-center gap-1 justify-end">
+                      <span className={cn(
+                        'text-[10px] tabular-nums font-bold',
+                        bVal > rVal ? 'text-blue-400' : bVal === rVal ? 'text-zinc-500' : 'text-zinc-600',
+                      )}>
+                        {bVal.toFixed(1)}
+                      </span>
+                      <div className="w-16 h-1.5 rounded-full bg-zinc-700 overflow-hidden flex justify-end">
+                        <div
+                          className={cn('h-full rounded-full', bVal >= rVal ? 'bg-blue-500' : 'bg-blue-500/30')}
+                          style={{ width: `${(bVal / maxVal) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className="text-[9px] text-zinc-500 text-center leading-[18px]">{label}</span>
+                    <div className="flex items-center gap-1">
+                      <div className="w-16 h-1.5 rounded-full bg-zinc-700 overflow-hidden">
+                        <div
+                          className={cn('h-full rounded-full', rVal >= bVal ? 'bg-red-500' : 'bg-red-500/30')}
+                          style={{ width: `${(rVal / maxVal) * 100}%` }}
+                        />
+                      </div>
+                      <span className={cn(
+                        'text-[10px] tabular-nums font-bold',
+                        rVal > bVal ? 'text-red-400' : rVal === bVal ? 'text-zinc-500' : 'text-zinc-600',
+                      )}>
+                        {rVal.toFixed(1)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -600,9 +783,12 @@ function CompletedGameScoreboardComponent({ game, ddragonVersion }: CompletedGam
     ? (stats.winner.toUpperCase() === game.blue_team.code.toUpperCase() ? 'blue' : 'red')
     : (stats && stats.blue_kills > stats.red_kills ? 'blue' : 'red');
 
+  // Game duration in seconds (normalize from either field)
+  const gameLengthSec = stats?.game_length ?? stats?.game_time_sec ?? null;
+
   // Format game duration
-  const gameDuration = stats?.game_length
-    ? `${Math.floor(stats.game_length / 60)}:${String(stats.game_length % 60).padStart(2, '0')}`
+  const gameDuration = gameLengthSec
+    ? `${Math.floor(gameLengthSec / 60)}:${String(Math.round(gameLengthSec % 60)).padStart(2, '0')}`
     : null;
 
   // Map players by role
@@ -772,7 +958,7 @@ function CompletedGameScoreboardComponent({ game, ddragonVersion }: CompletedGam
           winner={winner}
           blueCode={game.blue_team.code}
           redCode={game.red_team.code}
-          gameDuration={stats.game_length}
+          gameDuration={gameLengthSec}
         />
       )}
     </div>

@@ -675,6 +675,7 @@ export interface SeriesGameStats {
   red_barons: number;
   winner?: string;
   game_length?: number | null;
+  game_time_sec?: number | null;
   source?: string;
 }
 

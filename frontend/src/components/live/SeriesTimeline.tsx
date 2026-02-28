@@ -83,9 +83,12 @@ function SeriesTimelineComponent({ games, ddragonVersion, selectedGameNumber, on
               {isCompleted && winnerCode && (
                 <span className="text-[9px] font-bold text-yellow-500">{winnerCode}</span>
               )}
-              {isCompleted && sg.final_stats?.game_length != null && (
+              {isCompleted && (sg.final_stats?.game_length ?? sg.final_stats?.game_time_sec) != null && (
                 <span className="text-[9px] text-zinc-500">
-                  {Math.floor(sg.final_stats.game_length)}:{String(Math.round((sg.final_stats.game_length % 1) * 60)).padStart(2, '0')}
+                  {(() => {
+                    const sec = (sg.final_stats!.game_length ?? sg.final_stats!.game_time_sec)!;
+                    return `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
+                  })()}
                 </span>
               )}
             </div>
