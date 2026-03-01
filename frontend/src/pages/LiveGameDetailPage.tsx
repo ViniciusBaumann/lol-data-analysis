@@ -56,27 +56,27 @@ const PageHeader = memo(function PageHeader({
   refresh,
 }: PageHeaderProps) {
   return (
-    <div className="flex items-center justify-between flex-wrap gap-3">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
         <Link
           to="/live"
-          className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
         >
           <ChevronLeft size={14} />
-          Partidas
+          <span className="hidden sm:inline">Partidas</span>
         </Link>
-        <div className="h-4 w-px bg-zinc-800" />
+        <div className="h-4 w-px bg-zinc-800 shrink-0" />
         {game && (
           <>
             {game.league.image && (
-              <img src={game.league.image} alt="" className="h-5 w-5 object-contain opacity-80" />
+              <img src={game.league.image} alt="" className="h-5 w-5 object-contain opacity-80 shrink-0" />
             )}
-            <span className="text-sm font-medium text-zinc-400">{game.league.name}</span>
+            <span className="text-xs sm:text-sm font-medium text-zinc-400 truncate">{game.league.name}</span>
             {game.block_name && (
-              <span className="text-sm text-zinc-600">{game.block_name}</span>
+              <span className="text-xs sm:text-sm text-zinc-600 hidden sm:inline">{game.block_name}</span>
             )}
-            <span className="text-sm text-zinc-600">{boLabel(game.strategy)}</span>
-            <div className="flex items-center gap-1.5">
+            <span className="text-xs sm:text-sm text-zinc-600 shrink-0">{boLabel(game.strategy)}</span>
+            <div className="flex items-center gap-1.5 shrink-0">
               <LiveDot />
               <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Live</span>
             </div>
@@ -85,23 +85,23 @@ const PageHeader = memo(function PageHeader({
         {scheduleMatch && !game && (
           <>
             {scheduleMatch.league.image && (
-              <img src={scheduleMatch.league.image} alt="" className="h-5 w-5 object-contain opacity-80" />
+              <img src={scheduleMatch.league.image} alt="" className="h-5 w-5 object-contain opacity-80 shrink-0" />
             )}
-            <span className="text-sm font-medium text-zinc-400">{scheduleMatch.league.name}</span>
+            <span className="text-xs sm:text-sm font-medium text-zinc-400 truncate">{scheduleMatch.league.name}</span>
           </>
         )}
         {lastUpdated && (
-          <span className="text-[10px] text-zinc-600">{timeAgo(lastUpdated)}</span>
+          <span className="text-[10px] text-zinc-600 shrink-0">{timeAgo(lastUpdated)}</span>
         )}
       </div>
       {game && (
         <button
           onClick={refresh}
           disabled={isRefreshing}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 transition-colors text-zinc-400 disabled:opacity-50"
+          className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 transition-colors text-zinc-400 disabled:opacity-50 shrink-0"
         >
           <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
-          Atualizar
+          <span className="hidden sm:inline">Atualizar</span>
         </button>
       )}
     </div>

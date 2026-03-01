@@ -161,7 +161,7 @@ function TeamStatsBar({
   if (!isBlue) items.reverse();
 
   return (
-    <div className={cn('flex items-center gap-4', isBlue ? 'justify-start' : 'justify-end')}>
+    <div className={cn('flex items-center gap-2 sm:gap-4', isBlue ? 'justify-start' : 'justify-end')}>
       {items.map((item, idx) => (
         <StatItem key={idx} icon={item.icon} value={item.value} highlight={item.better} />
       ))}
@@ -807,43 +807,43 @@ function CompletedGameScoreboardComponent({ game, ddragonVersion }: CompletedGam
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/50">
+      <div className="flex items-center justify-between px-3 py-2.5 sm:px-4 sm:py-3 border-b border-zinc-800 bg-zinc-900/50">
         {/* Blue team */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {game.blue_team.image && (
             <img
               src={game.blue_team.image}
               alt={game.blue_team.code}
               className={cn(
-                'h-10 w-10 object-contain',
+                'h-7 w-7 sm:h-10 sm:w-10 object-contain',
                 winner === 'blue' && 'ring-2 ring-yellow-500 rounded-lg'
               )}
             />
           )}
-          <div className="flex items-center gap-2">
-            <span className="text-base font-bold text-blue-400">{game.blue_team.code}</span>
-            {winner === 'blue' && <Trophy size={16} className="text-yellow-500" />}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="text-sm sm:text-base font-bold text-blue-400">{game.blue_team.code}</span>
+            {winner === 'blue' && <Trophy size={14} className="text-yellow-500 sm:w-4 sm:h-4" />}
           </div>
         </div>
 
         {/* Center */}
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex flex-col items-center gap-0.5 sm:gap-1">
           <CompletedBadge />
-          <span className="text-xs font-medium text-zinc-500">Game {game.number}</span>
+          <span className="text-[10px] sm:text-xs font-medium text-zinc-500">Game {game.number}</span>
         </div>
 
         {/* Red team */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            {winner === 'red' && <Trophy size={16} className="text-yellow-500" />}
-            <span className="text-base font-bold text-red-400">{game.red_team.code}</span>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {winner === 'red' && <Trophy size={14} className="text-yellow-500 sm:w-4 sm:h-4" />}
+            <span className="text-sm sm:text-base font-bold text-red-400">{game.red_team.code}</span>
           </div>
           {game.red_team.image && (
             <img
               src={game.red_team.image}
               alt={game.red_team.code}
               className={cn(
-                'h-10 w-10 object-contain',
+                'h-7 w-7 sm:h-10 sm:w-10 object-contain',
                 winner === 'red' && 'ring-2 ring-yellow-500 rounded-lg'
               )}
             />
@@ -871,7 +871,8 @@ function CompletedGameScoreboardComponent({ game, ddragonVersion }: CompletedGam
 
       {/* Team Stats Bar */}
       {hasDetailedStats && (
-        <div className="flex items-center justify-between px-4 py-3 bg-zinc-800/30 border-b border-zinc-800">
+        <div className="overflow-x-auto border-b border-zinc-800">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-zinc-800/30 min-w-[480px]">
           <TeamStatsBar
             kills={stats.blue_kills}
             gold={stats.blue_gold}
@@ -901,11 +902,13 @@ function CompletedGameScoreboardComponent({ game, ddragonVersion }: CompletedGam
             side="red"
           />
         </div>
+        </div>
       )}
 
       {/* Column headers */}
       {hasPlayers && (
-        <div className="flex items-center px-4 py-1.5 border-b border-zinc-800/50 bg-zinc-900/30">
+        <div className="overflow-x-auto">
+        <div className="flex items-center px-3 sm:px-4 py-1.5 border-b border-zinc-800/50 bg-zinc-900/30 min-w-[560px]">
           <div className="flex-1 flex items-center gap-2">
             <span className="text-[9px] font-semibold text-zinc-600 uppercase">Champion</span>
             <span className="ml-auto text-[9px] font-semibold text-zinc-600 uppercase">Items</span>
@@ -922,11 +925,13 @@ function CompletedGameScoreboardComponent({ game, ddragonVersion }: CompletedGam
             <span className="ml-auto text-[9px] font-semibold text-zinc-600 uppercase">Champion</span>
           </div>
         </div>
+        </div>
       )}
 
       {/* Player rows */}
       {(hasPlayers || draft) && (
-        <div className="px-4 py-1">
+        <div className="overflow-x-auto">
+        <div className="px-3 sm:px-4 py-1 min-w-[560px]">
           {POSITIONS.map((pos) => (
             <PlayerRow
               key={pos}
@@ -938,6 +943,7 @@ function CompletedGameScoreboardComponent({ game, ddragonVersion }: CompletedGam
               ddragonVersion={ddragonVersion}
             />
           ))}
+        </div>
         </div>
       )}
 

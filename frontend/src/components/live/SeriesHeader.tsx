@@ -14,39 +14,39 @@ export function SeriesHeader({ game }: SeriesHeaderProps) {
   if (!isBo) return null;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-6 py-5">
-      <div className="flex items-center justify-center gap-8">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 sm:px-6 sm:py-5">
+      <div className="flex items-center justify-center gap-3 sm:gap-8">
         {/* Blue team */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           {game.blue_team.image && (
             <img
               src={game.blue_team.image}
               alt={game.blue_team.code}
-              className="h-12 w-12 object-contain"
+              className="h-8 w-8 sm:h-12 sm:w-12 object-contain"
             />
           )}
-          <span className="text-lg font-bold text-blue-400">{game.blue_team.code}</span>
+          <span className="text-sm sm:text-lg font-bold text-blue-400">{game.blue_team.code}</span>
         </div>
 
         {/* Score */}
-        <div className="flex items-center gap-4 px-6">
+        <div className="flex items-center gap-2 sm:gap-4 px-2 sm:px-6">
           <span
             className={cn(
-              'text-4xl font-black tabular-nums transition-colors',
+              'text-2xl sm:text-4xl font-black tabular-nums transition-colors',
               blueWins > redWins ? 'text-blue-400' : 'text-zinc-400',
             )}
           >
             {blueWins}
           </span>
           <div className="flex flex-col items-center">
-            <span className="text-zinc-600 font-bold text-lg">:</span>
+            <span className="text-zinc-600 font-bold text-base sm:text-lg">:</span>
             <span className="text-[10px] text-zinc-600 uppercase tracking-widest">
               Bo{count}
             </span>
           </div>
           <span
             className={cn(
-              'text-4xl font-black tabular-nums transition-colors',
+              'text-2xl sm:text-4xl font-black tabular-nums transition-colors',
               redWins > blueWins ? 'text-red-400' : 'text-zinc-400',
             )}
           >
@@ -55,13 +55,13 @@ export function SeriesHeader({ game }: SeriesHeaderProps) {
         </div>
 
         {/* Red team */}
-        <div className="flex items-center gap-4">
-          <span className="text-lg font-bold text-red-400">{game.red_team.code}</span>
+        <div className="flex items-center gap-2 sm:gap-4">
+          <span className="text-sm sm:text-lg font-bold text-red-400">{game.red_team.code}</span>
           {game.red_team.image && (
             <img
               src={game.red_team.image}
               alt={game.red_team.code}
-              className="h-12 w-12 object-contain"
+              className="h-8 w-8 sm:h-12 sm:w-12 object-contain"
             />
           )}
         </div>

@@ -114,9 +114,99 @@ function StatItem({
   className?: string;
 }) {
   return (
-    <div className={cn('flex items-center gap-1.5', className)}>
+    <div className={cn('flex items-center gap-1 sm:gap-1.5', className)}>
       {icon}
-      <span className="text-sm font-bold tabular-nums text-zinc-100">{value}</span>
+      <span className="text-xs sm:text-sm font-bold tabular-nums text-zinc-100">{value}</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mobile Player Row (compact view for small screens)
+// ---------------------------------------------------------------------------
+
+function MobilePlayerRow({ player, goldDiff, ddragonVersion, side, isLast }: PlayerRowProps) {
+  const alive = player.currentHealth > 0;
+  const champUrl = champImgUrl(ddragonVersion, player.championKey);
+  const goldDiffStr =
+    goldDiff > 0
+      ? `+${goldDiff >= 1000 ? (goldDiff / 1000).toFixed(1) + 'k' : goldDiff}`
+      : goldDiff < 0
+      ? `${goldDiff <= -1000 ? (goldDiff / 1000).toFixed(1) + 'k' : goldDiff}`
+      : '-';
+
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-2 px-3 py-2 transition-colors',
+        !alive && 'opacity-40',
+        !isLast && 'border-b border-zinc-800/50',
+      )}
+    >
+      {/* Champion + Level */}
+      <div className="relative shrink-0">
+        {champUrl ? (
+          <img
+            src={champUrl}
+            alt={player.champion}
+            className="w-8 h-8 rounded-md bg-zinc-800 ring-1 ring-zinc-700"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-8 h-8 rounded-md bg-zinc-800 flex items-center justify-center text-[10px] text-zinc-500">
+            {player.champion.charAt(0)}
+          </div>
+        )}
+        <span
+          className={cn(
+            'absolute -bottom-1 -left-1 text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center ring-1 ring-zinc-900',
+            side === 'blue' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white',
+          )}
+        >
+          {player.level}
+        </span>
+      </div>
+
+      {/* Name */}
+      <div className="min-w-0 flex-1">
+        <p className={cn('text-xs font-semibold truncate', side === 'blue' ? 'text-blue-400' : 'text-red-400')}>
+          {player.champion}
+        </p>
+        <p className="text-[10px] text-zinc-600 truncate">{player.summonerName}</p>
+      </div>
+
+      {/* CS */}
+      <span className="text-[11px] text-zinc-500 tabular-nums shrink-0">{player.creepScore}</span>
+
+      {/* KDA */}
+      <span className="text-[11px] font-bold tabular-nums shrink-0">
+        <span className="text-zinc-100">{player.kills}</span>
+        <span className="text-zinc-600">/</span>
+        <span className="text-red-400">{player.deaths}</span>
+        <span className="text-zinc-600">/</span>
+        <span className="text-zinc-100">{player.assists}</span>
+      </span>
+
+      {/* Gold Diff */}
+      <span
+        className={cn(
+          'text-[11px] font-bold tabular-nums text-right shrink-0 w-10',
+          goldDiff > 0 ? 'text-emerald-400' : goldDiff < 0 ? 'text-red-400' : 'text-zinc-600',
+        )}
+      >
+        {goldDiffStr}
+      </span>
+    </div>
+  );
+}
+
+function MobileColumnHeaders() {
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 border-b border-zinc-800 bg-zinc-900/50">
+      <span className="text-[9px] text-zinc-500 uppercase font-medium tracking-wider flex-1" />
+      <span className="text-[9px] text-zinc-500 uppercase font-medium tracking-wider">CS</span>
+      <span className="text-[9px] text-zinc-500 uppercase font-medium tracking-wider">KDA</span>
+      <span className="text-[9px] text-zinc-500 uppercase font-medium tracking-wider text-right w-10">+/-</span>
     </div>
   );
 }
@@ -284,7 +374,7 @@ function TeamStatsBar({ kills, gold, towers, dragons, barons, inhibitors, side }
       ];
 
   return (
-    <div className={cn('flex items-center gap-5', isBlue ? 'justify-start' : 'justify-end')}>
+    <div className={cn('flex items-center gap-2 sm:gap-5', isBlue ? 'justify-start' : 'justify-end')}>
       {items.map((item, idx) => (
         <StatItem key={idx} icon={item.icon} value={item.value} />
       ))}
@@ -361,37 +451,37 @@ export function GameScoreboard({ game, ddragonVersion }: GameScoreboardProps) {
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
       {/* Header: Teams + IN GAME badge + Time */}
-      <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-800">
+      <div className="flex items-center justify-between px-3 py-3 sm:px-6 sm:py-5 border-b border-zinc-800">
         {/* Blue team */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           {game.blue_team.image && (
             <img
               src={game.blue_team.image}
               alt={game.blue_team.code}
-              className="h-14 w-14 object-contain drop-shadow-lg"
+              className="h-8 w-8 sm:h-14 sm:w-14 object-contain drop-shadow-lg"
             />
           )}
-          <span className="text-xl font-bold text-zinc-100">{game.blue_team.code}</span>
+          <span className="text-sm sm:text-xl font-bold text-zinc-100">{game.blue_team.code}</span>
         </div>
 
         {/* Center: IN GAME + Time */}
-        <div className="flex flex-col items-center gap-1.5">
+        <div className="flex flex-col items-center gap-1 sm:gap-1.5">
           <LiveBadge statsDisabled={statsDisabled} />
           {!statsDisabled && (
-            <span className="text-2xl font-bold text-zinc-100 tabular-nums tracking-tight">
+            <span className="text-lg sm:text-2xl font-bold text-zinc-100 tabular-nums tracking-tight">
               {formatGameTime(stats?.game_time_sec)}
             </span>
           )}
         </div>
 
         {/* Red team */}
-        <div className="flex items-center gap-4">
-          <span className="text-xl font-bold text-zinc-100">{game.red_team.code}</span>
+        <div className="flex items-center gap-2 sm:gap-4">
+          <span className="text-sm sm:text-xl font-bold text-zinc-100">{game.red_team.code}</span>
           {game.red_team.image && (
             <img
               src={game.red_team.image}
               alt={game.red_team.code}
-              className="h-14 w-14 object-contain drop-shadow-lg"
+              className="h-8 w-8 sm:h-14 sm:w-14 object-contain drop-shadow-lg"
             />
           )}
         </div>
@@ -402,7 +492,8 @@ export function GameScoreboard({ game, ddragonVersion }: GameScoreboardProps) {
         const goldDiff = stats.blue_gold - stats.red_gold;
         const absGoldDiff = Math.abs(goldDiff);
         return (
-          <div className="flex items-center justify-between px-6 py-3 bg-zinc-900/80 border-b border-zinc-800">
+          <div className="overflow-x-auto border-b border-zinc-800">
+          <div className="flex items-center justify-between px-3 sm:px-6 py-2 sm:py-3 bg-zinc-900/80 min-w-[480px]">
             <TeamStatsBar
               kills={stats.blue_kills}
               gold={stats.blue_gold}
@@ -434,22 +525,22 @@ export function GameScoreboard({ game, ddragonVersion }: GameScoreboardProps) {
               side="red"
             />
           </div>
+          </div>
         );
       })()}
 
       {/* Player table */}
       {hasPlayers && (
-        <div className="overflow-x-auto">
-          <div className="min-w-[900px]">
-            <ColumnHeaders />
-
-            {/* Blue team */}
+        <>
+          {/* Mobile compact view */}
+          <div className="md:hidden">
+            <MobileColumnHeaders />
             <TeamHeader teamImage={game.blue_team.image} teamCode={game.blue_team.code} side="blue" />
             {players.blue.map((player, idx) => {
               const opponent = players.red[idx];
               const goldDiff = opponent ? player.totalGold - opponent.totalGold : 0;
               return (
-                <PlayerRow
+                <MobilePlayerRow
                   key={player.participantId}
                   player={player}
                   goldDiff={goldDiff}
@@ -459,14 +550,12 @@ export function GameScoreboard({ game, ddragonVersion }: GameScoreboardProps) {
                 />
               );
             })}
-
-            {/* Red team */}
             <TeamHeader teamImage={game.red_team.image} teamCode={game.red_team.code} side="red" />
             {players.red.map((player, idx) => {
               const opponent = players.blue[idx];
               const goldDiff = opponent ? player.totalGold - opponent.totalGold : 0;
               return (
-                <PlayerRow
+                <MobilePlayerRow
                   key={player.participantId}
                   player={player}
                   goldDiff={goldDiff}
@@ -477,7 +566,44 @@ export function GameScoreboard({ game, ddragonVersion }: GameScoreboardProps) {
               );
             })}
           </div>
-        </div>
+
+          {/* Desktop full table */}
+          <div className="hidden md:block overflow-x-auto">
+            <div className="min-w-[900px]">
+              <ColumnHeaders />
+              <TeamHeader teamImage={game.blue_team.image} teamCode={game.blue_team.code} side="blue" />
+              {players.blue.map((player, idx) => {
+                const opponent = players.red[idx];
+                const goldDiff = opponent ? player.totalGold - opponent.totalGold : 0;
+                return (
+                  <PlayerRow
+                    key={player.participantId}
+                    player={player}
+                    goldDiff={goldDiff}
+                    ddragonVersion={ddragonVersion}
+                    side="blue"
+                    isLast={idx === players.blue.length - 1}
+                  />
+                );
+              })}
+              <TeamHeader teamImage={game.red_team.image} teamCode={game.red_team.code} side="red" />
+              {players.red.map((player, idx) => {
+                const opponent = players.blue[idx];
+                const goldDiff = opponent ? player.totalGold - opponent.totalGold : 0;
+                return (
+                  <PlayerRow
+                    key={player.participantId}
+                    player={player}
+                    goldDiff={goldDiff}
+                    ddragonVersion={ddragonVersion}
+                    side="red"
+                    isLast={idx === players.red.length - 1}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        </>
       )}
 
       {/* No player data fallback */}

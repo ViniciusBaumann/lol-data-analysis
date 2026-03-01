@@ -61,21 +61,21 @@ function AwaitingStartPanelComponent({ game }: AwaitingStartPanelProps) {
   const pools = game.draft_pools;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-6 py-6">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-4 sm:px-6 sm:py-6">
       <div className="flex flex-col items-center justify-center gap-4">
         {/* Teams header */}
-        <div className="flex items-center gap-6 mb-2">
+        <div className="flex items-center gap-3 sm:gap-6 mb-2">
           <div className="flex items-center gap-2">
             {game.blue_team.image && (
-              <img src={game.blue_team.image} alt="" className="h-10 w-10 object-contain" />
+              <img src={game.blue_team.image} alt="" className="h-8 w-8 sm:h-10 sm:w-10 object-contain" />
             )}
-            <span className="text-lg font-bold text-blue-400">{game.blue_team.code}</span>
+            <span className="text-sm sm:text-lg font-bold text-blue-400">{game.blue_team.code}</span>
           </div>
-          <span className="text-zinc-600 font-bold">vs</span>
+          <span className="text-zinc-600 font-bold text-sm sm:text-base">vs</span>
           <div className="flex items-center gap-2">
-            <span className="text-lg font-bold text-red-400">{game.red_team.code}</span>
+            <span className="text-sm sm:text-lg font-bold text-red-400">{game.red_team.code}</span>
             {game.red_team.image && (
-              <img src={game.red_team.image} alt="" className="h-10 w-10 object-contain" />
+              <img src={game.red_team.image} alt="" className="h-8 w-8 sm:h-10 sm:w-10 object-contain" />
             )}
           </div>
         </div>

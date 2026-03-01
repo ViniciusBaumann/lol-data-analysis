@@ -113,14 +113,14 @@ function ScheduleMatchViewComponent({ match, compareData, compareLoading }: Sche
         </div>
 
         {/* Teams */}
-        <div className="px-6 py-6">
+        <div className="px-4 py-4 sm:px-6 sm:py-6">
           <div className="flex items-center justify-between">
             {/* Team 1 */}
             <div className="flex flex-col items-center gap-2">
               {team1?.image && (
-                <img src={team1.image} alt="" className="h-16 w-16 object-contain" />
+                <img src={team1.image} alt="" className="h-10 w-10 sm:h-16 sm:w-16 object-contain" />
               )}
-              <span className="text-lg font-bold text-zinc-100">{team1?.name}</span>
+              <span className="text-sm sm:text-lg font-bold text-zinc-100 text-center">{team1?.name}</span>
               {isCompleted && team1?.result && (
                 <span className="text-2xl font-black text-zinc-100">{team1.result.gameWins}</span>
               )}
@@ -156,9 +156,9 @@ function ScheduleMatchViewComponent({ match, compareData, compareLoading }: Sche
             {/* Team 2 */}
             <div className="flex flex-col items-center gap-2">
               {team2?.image && (
-                <img src={team2.image} alt="" className="h-16 w-16 object-contain" />
+                <img src={team2.image} alt="" className="h-10 w-10 sm:h-16 sm:w-16 object-contain" />
               )}
-              <span className="text-lg font-bold text-zinc-100">{team2?.name}</span>
+              <span className="text-sm sm:text-lg font-bold text-zinc-100 text-center">{team2?.name}</span>
               {isCompleted && team2?.result && (
                 <span className="text-2xl font-black text-zinc-100">{team2.result.gameWins}</span>
               )}

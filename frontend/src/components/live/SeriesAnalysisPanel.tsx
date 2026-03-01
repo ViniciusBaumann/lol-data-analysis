@@ -275,7 +275,8 @@ function ObjectiveDiffSection({ diffs, totals, blueTeamCode, redTeamCode }: Obje
 
       {/* Header */}
       {hasDetailedStats && (
-        <div className="grid grid-cols-[48px_1fr_1fr_1fr_1fr_1fr] gap-1 mb-1">
+        <div className="overflow-x-auto">
+        <div className="grid grid-cols-[48px_1fr_1fr_1fr_1fr_1fr] gap-1 mb-1 min-w-[360px]">
           <div />
           {OBJ_COLS.map(col => (
             <div key={col.key} className="flex items-center justify-center gap-1">
@@ -284,13 +285,14 @@ function ObjectiveDiffSection({ diffs, totals, blueTeamCode, redTeamCode }: Obje
             </div>
           ))}
         </div>
+        </div>
       )}
 
       {/* Game rows - detailed view */}
       {hasDetailedStats && diffs.map(d => (
+        <div className="overflow-x-auto" key={d.gameNumber}>
         <div
-          key={d.gameNumber}
-          className="grid grid-cols-[48px_1fr_1fr_1fr_1fr_1fr] gap-1 py-1.5 border-b border-zinc-800/30 last:border-0"
+          className="grid grid-cols-[48px_1fr_1fr_1fr_1fr_1fr] gap-1 py-1.5 border-b border-zinc-800/30 last:border-0 min-w-[360px]"
         >
           <div className="flex items-center gap-1">
             <span className="text-[10px] font-bold text-zinc-500">G{d.gameNumber}</span>
@@ -315,6 +317,7 @@ function ObjectiveDiffSection({ diffs, totals, blueTeamCode, redTeamCode }: Obje
             );
           })}
         </div>
+        </div>
       ))}
 
       {/* Game rows - winner-only view (PandaScore) */}
@@ -336,7 +339,8 @@ function ObjectiveDiffSection({ diffs, totals, blueTeamCode, redTeamCode }: Obje
 
       {/* Totals row */}
       {hasDetailedStats && diffs.length >= 2 && (
-        <div className="grid grid-cols-[48px_1fr_1fr_1fr_1fr_1fr] gap-1 pt-2 mt-1 border-t border-zinc-700">
+        <div className="overflow-x-auto">
+        <div className="grid grid-cols-[48px_1fr_1fr_1fr_1fr_1fr] gap-1 pt-2 mt-1 border-t border-zinc-700 min-w-[360px]">
           <span className="text-[10px] font-bold text-zinc-400">Total</span>
           {OBJ_COLS.map(col => {
             const stat: ObjectiveSideStat = totals[col.key];
@@ -349,6 +353,7 @@ function ObjectiveDiffSection({ diffs, totals, blueTeamCode, redTeamCode }: Obje
               </div>
             );
           })}
+        </div>
         </div>
       )}
     </div>
@@ -391,7 +396,7 @@ function MomentumSection({
 
       <div className="space-y-3">
         {/* Momentum trail */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto">
           <span className="text-[10px] text-zinc-500 w-16 shrink-0">Resultado</span>
           <div className="flex items-center gap-1">
             {momentum.momentumTrail.map((entry, i) => (
@@ -420,7 +425,7 @@ function MomentumSection({
         </div>
 
         {/* Side tracker */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto">
           <span className="text-[10px] text-zinc-500 w-16 shrink-0">Lados</span>
           <div className="flex items-center gap-1">
             {sideTracker.gamesSides.map((gs, i) => (
@@ -728,21 +733,21 @@ function SeriesAnalysisPanelComponent({ game, ddragonVersion }: SeriesAnalysisPa
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-800/50">
-        <div className="flex items-center justify-between">
+      <div className="px-3 py-2.5 sm:px-4 sm:py-3 border-b border-zinc-800 bg-zinc-800/50">
+        <div className="flex items-center justify-between flex-wrap gap-1">
           <div className="flex items-center gap-2">
             <BarChart3 size={16} className="text-amber-400" />
-            <span className="text-sm font-semibold text-zinc-200">Analise da Serie</span>
+            <span className="text-xs sm:text-sm font-semibold text-zinc-200">Analise da Serie</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-[10px] text-zinc-500">
-              {analysis.fearlessTracker.gamesCompleted} jogo(s) | {analysis.fearlessTracker.totalUsed} picks usados
+              {analysis.fearlessTracker.gamesCompleted} jogo(s) | {analysis.fearlessTracker.totalUsed} picks
             </span>
           </div>
         </div>
       </div>
 
-      <div className="p-4 space-y-5">
+      <div className="p-3 sm:p-4 space-y-4 sm:space-y-5">
         {/* Fearless Draft */}
         <FearlessDraftSection
           picks={analysis.fearlessTracker.picks}

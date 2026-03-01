@@ -208,17 +208,17 @@ function MatchPredictionPanelComponent({
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-800/50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <TrendingUp size={16} className="text-emerald-400" />
-            <span className="text-sm font-semibold text-zinc-200">Predicao da Partida</span>
-            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${draftOnlyMode ? 'bg-zinc-700 text-zinc-400' : 'bg-emerald-500/15 text-emerald-400'}`}>
-              {draftOnlyMode ? 'Apenas Draft' : 'Draft + Contexto'}
+      <div className="px-3 py-2.5 sm:px-4 sm:py-3 border-b border-zinc-800 bg-zinc-800/50">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <TrendingUp size={16} className="text-emerald-400 shrink-0" />
+            <span className="text-xs sm:text-sm font-semibold text-zinc-200">Predicao</span>
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ${draftOnlyMode ? 'bg-zinc-700 text-zinc-400' : 'bg-emerald-500/15 text-emerald-400'}`}>
+              {draftOnlyMode ? 'Draft' : 'Draft + Ctx'}
             </span>
             {draftOnlyLoading && <Loader2 size={12} className="animate-spin text-zinc-500" />}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* Draft-Only Toggle Switch */}
             <div className="flex items-center gap-1.5">
               <button
@@ -232,7 +232,7 @@ function MatchPredictionPanelComponent({
                   style={{ transform: draftOnlyMode ? 'translateX(2px)' : 'translateX(18px)' }}
                 />
               </button>
-              <span className="text-[10px] text-zinc-600">Contexto</span>
+              <span className="text-[10px] text-zinc-600 hidden sm:inline">Contexto</span>
             </div>
             <button
               onClick={() => {
@@ -243,27 +243,27 @@ function MatchPredictionPanelComponent({
               title="Comparar times em nova aba"
             >
               <ExternalLink size={12} />
-              Comparar
+              <span className="hidden sm:inline">Comparar</span>
             </button>
           </div>
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="p-3 sm:p-4 space-y-3 sm:space-y-4">
         {/* Teams with Draft */}
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-1 sm:gap-2">
           {/* Blue Team */}
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 mb-2">
               {blueTeam.image && (
-                <img src={blueTeam.image} alt={blueTeam.code} className="h-8 w-8 object-contain" />
+                <img src={blueTeam.image} alt={blueTeam.code} className="h-6 w-6 sm:h-8 sm:w-8 object-contain shrink-0" />
               )}
-              <div>
-                <p className="text-sm font-bold text-blue-400">{blueTeam.code}</p>
-                <p className="text-[10px] text-zinc-500">{blueTeam.name}</p>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-bold text-blue-400 truncate">{blueTeam.code}</p>
+                <p className="text-[9px] sm:text-[10px] text-zinc-500 truncate hidden sm:block">{blueTeam.name}</p>
               </div>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5 sm:gap-1">
               {blueChampions.map((champ, idx) => {
                 const slot = `blue_${POSITIONS[idx]}`;
                 const spike = activePowerSpikes?.[slot];
@@ -273,7 +273,7 @@ function MatchPredictionPanelComponent({
                     src={champImgUrl(ddragonVersion, champ)}
                     alt={champ}
                     title={buildSpikeTooltip(champ, spike)}
-                    className="w-8 h-8 rounded bg-zinc-800 ring-1 ring-blue-500/30"
+                    className="w-6 h-6 sm:w-8 sm:h-8 rounded bg-zinc-800 ring-1 ring-blue-500/30"
                     loading="lazy"
                   />
                 );
@@ -282,26 +282,25 @@ function MatchPredictionPanelComponent({
           </div>
 
           {/* Win Probability Center */}
-          <div className="flex flex-col items-center px-4 min-w-[160px]">
+          <div className="flex flex-col items-center px-1 sm:px-4 min-w-[100px] sm:min-w-[160px] shrink-0">
             {hasPredictions ? (
               <>
-                <div className="flex items-center gap-3 mb-1">
-                  <span className={`text-2xl font-black ${blueBetter ? 'text-blue-400' : 'text-zinc-500'}`}>
+                <div className="flex items-center gap-1 sm:gap-3 mb-1">
+                  <span className={`text-base sm:text-2xl font-black ${blueBetter ? 'text-blue-400' : 'text-zinc-500'}`}>
                     {activePredictions.blue_win_prob}%
                   </span>
-                  <span className="text-zinc-600">-</span>
-                  <span className={`text-2xl font-black ${!blueBetter ? 'text-red-400' : 'text-zinc-500'}`}>
+                  <span className="text-zinc-600 text-xs sm:text-base">-</span>
+                  <span className={`text-base sm:text-2xl font-black ${!blueBetter ? 'text-red-400' : 'text-zinc-500'}`}>
                     {activePredictions.red_win_prob}%
                   </span>
                 </div>
                 {hasComparison && Math.abs(draftDiff) >= 1 && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700">
+                  <div className="flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-zinc-800 border border-zinc-700">
                     <Swords size={10} className={draftDiff > 0 ? 'text-blue-400' : 'text-red-400'} />
-                    <span className="text-[10px] text-zinc-500">Base {teamOnlyBlueProb.toFixed(0)}%</span>
-                    <span className={`text-[11px] font-bold ${draftDiff > 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                    <span className="text-[9px] sm:text-[10px] text-zinc-500 hidden sm:inline">Base {teamOnlyBlueProb.toFixed(0)}%</span>
+                    <span className={`text-[10px] sm:text-[11px] font-bold ${draftDiff > 0 ? 'text-blue-400' : 'text-red-400'}`}>
                       {draftDiff > 0 ? '+' : ''}{draftDiff.toFixed(1)}%
                     </span>
-                    <span className="text-[10px] text-zinc-500">draft</span>
                   </div>
                 )}
               </>
@@ -311,17 +310,17 @@ function MatchPredictionPanelComponent({
           </div>
 
           {/* Red Team */}
-          <div className="flex-1">
-            <div className="flex items-center justify-end gap-2 mb-2">
-              <div className="text-right">
-                <p className="text-sm font-bold text-red-400">{redTeam.code}</p>
-                <p className="text-[10px] text-zinc-500">{redTeam.name}</p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-end gap-1.5 sm:gap-2 mb-2">
+              <div className="text-right min-w-0">
+                <p className="text-xs sm:text-sm font-bold text-red-400 truncate">{redTeam.code}</p>
+                <p className="text-[9px] sm:text-[10px] text-zinc-500 truncate hidden sm:block">{redTeam.name}</p>
               </div>
               {redTeam.image && (
-                <img src={redTeam.image} alt={redTeam.code} className="h-8 w-8 object-contain" />
+                <img src={redTeam.image} alt={redTeam.code} className="h-6 w-6 sm:h-8 sm:w-8 object-contain shrink-0" />
               )}
             </div>
-            <div className="flex items-center justify-end gap-1">
+            <div className="flex items-center justify-end gap-0.5 sm:gap-1">
               {redChampions.map((champ, idx) => {
                 const slot = `red_${POSITIONS[idx]}`;
                 const spike = activePowerSpikes?.[slot];
@@ -331,7 +330,7 @@ function MatchPredictionPanelComponent({
                     src={champImgUrl(ddragonVersion, champ)}
                     alt={champ}
                     title={buildSpikeTooltip(champ, spike)}
-                    className="w-8 h-8 rounded bg-zinc-800 ring-1 ring-red-500/30"
+                    className="w-6 h-6 sm:w-8 sm:h-8 rounded bg-zinc-800 ring-1 ring-red-500/30"
                     loading="lazy"
                   />
                 );
@@ -342,7 +341,7 @@ function MatchPredictionPanelComponent({
 
         {/* Composition Analysis */}
         {hasComposition && (
-          <div className="flex items-center justify-between gap-4 px-2">
+          <div className="flex items-center justify-between gap-2 sm:gap-4 px-1 sm:px-2">
             {/* Blue Composition */}
             <div className="flex-1">
               <div className="flex items-center gap-1 flex-wrap">
