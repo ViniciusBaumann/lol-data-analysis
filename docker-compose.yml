@@ -8,9 +8,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: datanalys
-      POSTGRES_USER: datanalys
-      POSTGRES_PASSWORD: datanalys
+      POSTGRES_DB: ${DB_NAME:-datanalys}
+      POSTGRES_USER: ${DB_USER:-datanalys}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-datanalys}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

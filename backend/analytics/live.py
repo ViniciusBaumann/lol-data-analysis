@@ -42,7 +42,7 @@ _snapshot_last_saved: dict[str, datetime] = {}
 _SNAPSHOT_SAVE_INTERVAL = 15  # seconds between saves for the same game
 
 # PandaScore API integration (fallback for completed game data)
-PANDASCORE_API_KEY = os.environ.get("PANDA_SCORE_API_KEY", "")
+PANDASCORE_API_KEY = os.environ.get("PANDASCORE_API_KEY", "")
 PANDASCORE_BASE_URL = "https://api.pandascore.co"
 _pandascore_cache: dict = {"data": None, "timestamp": None}
 _PANDASCORE_CACHE_TTL = 30  # seconds
