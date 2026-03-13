@@ -5,6 +5,7 @@ from pathlib import Path
 from collections import defaultdict
 
 import numpy as np
+import pandas as pd
 from django.db.models import Avg, Q, Sum, IntegerField
 from django.db.models.functions import Cast
 
@@ -168,6 +169,9 @@ def compute_team_features(team_id: int, n: int = 10, use_fallback: bool = True) 
     matches, only post-change matches are used. Also computes per-position
     stats (KDA, CS/min, damage/min, gold/min, vision) for each of the 5 roles.
 
+    Uses Pandas DataFrames for vectorized computation of averages, rates, and
+    per-position aggregations.
+
     Args:
         team_id: The database ID of the team.
         n: Number of recent matches to use for computing averages.
@@ -202,11 +206,13 @@ def compute_team_features(team_id: int, n: int = 10, use_fallback: bool = True) 
         match_id__in=match_ids, team_id=team_id
     ).select_related("player")
 
+    # Build player_stats_by_match for roster change detection (sequential logic)
     player_stats_by_match: dict[int, list] = {}
     for ps in player_stats_qs:
         player_stats_by_match.setdefault(ps.match_id, []).append(ps)
 
     # Detect roster changes and find reset index
+    # This is sequential by nature: we compare consecutive match rosters
     reset_idx = 0
     prev_roster: set | None = None
     for i, s in enumerate(stats_list):
@@ -224,42 +230,79 @@ def compute_team_features(team_id: int, n: int = 10, use_fallback: bool = True) 
     if len(stats_list) < 3:
         return get_default_team_features() if use_fallback else None
 
-    total = len(stats_list)
-    wins = sum(1 for s in stats_list if s.is_winner)
-
-    # Aggregate averages (14 team features)
-    avg_kills = sum(s.kills for s in stats_list) / total
-    avg_deaths = sum(s.deaths for s in stats_list) / total
-    avg_towers = sum(s.towers for s in stats_list) / total
-    avg_dragons = sum(s.dragons for s in stats_list) / total
-    avg_barons = sum(s.barons for s in stats_list) / total
-    avg_inhibitors = sum(s.inhibitors for s in stats_list) / total
-
-    first_blood_rate = sum(1 for s in stats_list if s.first_blood) / total
-    first_tower_rate = sum(1 for s in stats_list if s.first_tower) / total
-    first_dragon_rate = sum(1 for s in stats_list if s.first_dragon) / total
-    first_herald_rate = sum(1 for s in stats_list if s.first_herald) / total
-
-    gd10_vals = [s.golddiffat10 for s in stats_list if s.golddiffat10 is not None]
-    gd15_vals = [s.golddiffat15 for s in stats_list if s.golddiffat15 is not None]
-    avg_golddiffat10 = sum(gd10_vals) / len(gd10_vals) if gd10_vals else 0.0
-    avg_golddiffat15 = sum(gd15_vals) / len(gd15_vals) if gd15_vals else 0.0
-
+    # Build team stats DataFrame from truncated ORM objects
     truncated_match_ids = [s.match_id for s in stats_list]
+    team_records = []
+    for s in stats_list:
+        team_records.append({
+            "match_id": s.match_id,
+            "is_winner": s.is_winner,
+            "kills": s.kills,
+            "deaths": s.deaths,
+            "towers": s.towers,
+            "dragons": s.dragons,
+            "barons": s.barons,
+            "heralds": s.heralds,
+            "voidgrubs": s.voidgrubs,
+            "inhibitors": s.inhibitors,
+            "first_blood": s.first_blood,
+            "first_tower": s.first_tower,
+            "first_dragon": s.first_dragon,
+            "first_herald": s.first_herald,
+            "first_baron": s.first_baron,
+            "golddiffat10": s.golddiffat10,
+            "golddiffat15": s.golddiffat15,
+            "xpdiffat10": s.xpdiffat10,
+            "xpdiffat15": s.xpdiffat15,
+            "csdiffat10": s.csdiffat10,
+            "csdiffat15": s.csdiffat15,
+            "side": s.side,
+        })
+    df = pd.DataFrame(team_records)
+
+    total = len(df)
+
+    # Vectorized average calculations
+    win_rate = df["is_winner"].mean()
+    avg_kills = df["kills"].mean()
+    avg_deaths = df["deaths"].mean()
+    avg_towers = df["towers"].mean()
+    avg_dragons = df["dragons"].mean()
+    avg_barons = df["barons"].mean()
+    avg_heralds = df["heralds"].mean()
+    avg_voidgrubs = df["voidgrubs"].mean()
+    avg_inhibitors = df["inhibitors"].mean()
+
+    # Vectorized boolean rates
+    first_blood_rate = df["first_blood"].mean()
+    first_tower_rate = df["first_tower"].mean()
+    first_dragon_rate = df["first_dragon"].mean()
+    first_herald_rate = df["first_herald"].mean()
+    first_baron_rate = df["first_baron"].mean()
+
+    # Early game diffs (skip NaN values via nanmean, default to 0.0)
+    avg_golddiffat10 = df["golddiffat10"].mean() if df["golddiffat10"].notna().any() else 0.0
+    avg_golddiffat15 = df["golddiffat15"].mean() if df["golddiffat15"].notna().any() else 0.0
+    avg_xpdiffat10 = df["xpdiffat10"].mean() if df["xpdiffat10"].notna().any() else 0.0
+    avg_xpdiffat15 = df["xpdiffat15"].mean() if df["xpdiffat15"].notna().any() else 0.0
+    avg_csdiffat10 = df["csdiffat10"].mean() if df["csdiffat10"].notna().any() else 0.0
+    avg_csdiffat15 = df["csdiffat15"].mean() if df["csdiffat15"].notna().any() else 0.0
+
+    # Average game length from Match table
     matches = Match.objects.filter(id__in=truncated_match_ids, game_length__isnull=False)
     game_lengths = list(matches.values_list("game_length", flat=True))
     avg_game_length = sum(game_lengths) / len(game_lengths) if game_lengths else 30.0
 
-    # Recent form
-    last3 = stats_list[-3:] if len(stats_list) >= 3 else stats_list
-    last5 = stats_list[-5:] if len(stats_list) >= 5 else stats_list
-    win_rate_last3 = sum(1 for s in last3 if s.is_winner) / len(last3)
-    win_rate_last5 = sum(1 for s in last5 if s.is_winner) / len(last5)
+    # Recent form using DataFrame tail slicing
+    last3 = df["is_winner"].tail(3) if total >= 3 else df["is_winner"]
+    last5 = df["is_winner"].tail(5) if total >= 5 else df["is_winner"]
+    win_rate_last3 = last3.mean()
+    win_rate_last5 = last5.mean()
 
-    # Win/loss streak (positive = wins, negative = losses)
+    # Win/loss streak (sequential by nature, iterate reversed boolean Series)
     streak = 0
-    for s in reversed(stats_list):
-        if s.is_winner:
+    for won in df["is_winner"].iloc[::-1]:
+        if won:
             if streak < 0:
                 break
             streak += 1
@@ -268,97 +311,93 @@ def compute_team_features(team_id: int, n: int = 10, use_fallback: bool = True) 
                 break
             streak -= 1
 
-    # Side-specific win rates
-    blue_games = [s for s in stats_list if s.side == "Blue"]
-    red_games = [s for s in stats_list if s.side == "Red"]
-    blue_win_rate = (
-        sum(1 for s in blue_games if s.is_winner) / len(blue_games)
-        if blue_games else 0.5
-    )
-    red_win_rate = (
-        sum(1 for s in red_games if s.is_winner) / len(red_games)
-        if red_games else 0.5
-    )
+    # Side-specific win rates using vectorized boolean indexing
+    blue_mask = df["side"] == "Blue"
+    red_mask = df["side"] == "Red"
+    blue_win_rate = df.loc[blue_mask, "is_winner"].mean() if blue_mask.any() else 0.5
+    red_win_rate = df.loc[red_mask, "is_winner"].mean() if red_mask.any() else 0.5
 
-    # Extended early game features
-    xp10_vals = [s.xpdiffat10 for s in stats_list if s.xpdiffat10 is not None]
-    xp15_vals = [s.xpdiffat15 for s in stats_list if s.xpdiffat15 is not None]
-    cs10_vals = [s.csdiffat10 for s in stats_list if s.csdiffat10 is not None]
-    cs15_vals = [s.csdiffat15 for s in stats_list if s.csdiffat15 is not None]
-    avg_xpdiffat10 = sum(xp10_vals) / len(xp10_vals) if xp10_vals else 0.0
-    avg_xpdiffat15 = sum(xp15_vals) / len(xp15_vals) if xp15_vals else 0.0
-    avg_csdiffat10 = sum(cs10_vals) / len(cs10_vals) if cs10_vals else 0.0
-    avg_csdiffat15 = sum(cs15_vals) / len(cs15_vals) if cs15_vals else 0.0
-
-    # First baron rate
-    first_baron_rate = sum(1 for s in stats_list if s.first_baron) / total
-
-    # Objective control
-    avg_heralds = sum(s.heralds for s in stats_list) / total
-    avg_voidgrubs = sum(s.voidgrubs for s in stats_list) / total
-
-    # Compute momentum (trend in last 5 games)
-    if len(stats_list) >= 5:
-        recent_wins = sum(1 for s in stats_list[-5:] if s.is_winner)
-        older_wins = sum(1 for s in stats_list[-10:-5] if s.is_winner) if len(stats_list) >= 10 else recent_wins
+    # Momentum: trend in last 5 vs previous 5 games
+    if total >= 5:
+        recent_wins = df["is_winner"].tail(5).sum()
+        older_wins = df["is_winner"].iloc[-10:-5].sum() if total >= 10 else recent_wins
         momentum = (recent_wins - older_wins) / 5.0
     else:
         momentum = 0.0
 
     features = {
-        "win_rate": wins / total,
-        "avg_kills": avg_kills,
-        "avg_deaths": avg_deaths,
-        "avg_towers": avg_towers,
-        "avg_dragons": avg_dragons,
-        "avg_barons": avg_barons,
-        "avg_heralds": avg_heralds,
-        "avg_voidgrubs": avg_voidgrubs,
-        "avg_inhibitors": avg_inhibitors,
-        "first_blood_rate": first_blood_rate,
-        "first_tower_rate": first_tower_rate,
-        "first_dragon_rate": first_dragon_rate,
-        "first_herald_rate": first_herald_rate,
-        "first_baron_rate": first_baron_rate,
-        "avg_golddiffat10": avg_golddiffat10,
-        "avg_golddiffat15": avg_golddiffat15,
-        "avg_xpdiffat10": avg_xpdiffat10,
-        "avg_xpdiffat15": avg_xpdiffat15,
-        "avg_csdiffat10": avg_csdiffat10,
-        "avg_csdiffat15": avg_csdiffat15,
+        "win_rate": float(win_rate),
+        "avg_kills": float(avg_kills),
+        "avg_deaths": float(avg_deaths),
+        "avg_towers": float(avg_towers),
+        "avg_dragons": float(avg_dragons),
+        "avg_barons": float(avg_barons),
+        "avg_heralds": float(avg_heralds),
+        "avg_voidgrubs": float(avg_voidgrubs),
+        "avg_inhibitors": float(avg_inhibitors),
+        "first_blood_rate": float(first_blood_rate),
+        "first_tower_rate": float(first_tower_rate),
+        "first_dragon_rate": float(first_dragon_rate),
+        "first_herald_rate": float(first_herald_rate),
+        "first_baron_rate": float(first_baron_rate),
+        "avg_golddiffat10": float(avg_golddiffat10),
+        "avg_golddiffat15": float(avg_golddiffat15),
+        "avg_xpdiffat10": float(avg_xpdiffat10),
+        "avg_xpdiffat15": float(avg_xpdiffat15),
+        "avg_csdiffat10": float(avg_csdiffat10),
+        "avg_csdiffat15": float(avg_csdiffat15),
         "avg_game_length": avg_game_length,
-        "win_rate_last3": win_rate_last3,
-        "win_rate_last5": win_rate_last5,
+        "win_rate_last3": float(win_rate_last3),
+        "win_rate_last5": float(win_rate_last5),
         "streak": streak,
-        "momentum": momentum,
-        "blue_win_rate": blue_win_rate,
-        "red_win_rate": red_win_rate,
+        "momentum": float(momentum),
+        "blue_win_rate": float(blue_win_rate),
+        "red_win_rate": float(red_win_rate),
     }
 
-    # Per-position features (25 features: 5 positions × 5 stats)
-    pos_accum: dict[str, dict[str, list[float]]] = {
-        pos: {stat: [] for stat in POSITION_STATS} for pos in POSITIONS
-    }
-    for s in stats_list:
-        for ps in player_stats_by_match.get(s.match_id, []):
-            pos = ps.position.lower()
-            if pos in pos_accum:
-                pos_accum[pos]["kda"].append(ps.kda or 0.0)
-                pos_accum[pos]["cs_per_min"].append(ps.cs_per_min or 0.0)
-                pos_accum[pos]["damage_per_min"].append(ps.damage_per_min or 0.0)
-                pos_accum[pos]["gold_per_min"].append(ps.gold_per_min or 0.0)
-                pos_accum[pos]["vision_score"].append(ps.vision_score or 0.0)
+    # Per-position features (25 features: 5 positions x 5 stats) via groupby
+    # Build a DataFrame from player stats for truncated matches only
+    truncated_match_ids_set = set(truncated_match_ids)
+    player_records = []
+    for mid, ps_list in player_stats_by_match.items():
+        if mid not in truncated_match_ids_set:
+            continue
+        for ps in ps_list:
+            player_records.append({
+                "match_id": mid,
+                "position": ps.position.lower(),
+                "kda": ps.kda or 0.0,
+                "cs_per_min": ps.cs_per_min or 0.0,
+                "damage_per_min": ps.damage_per_min or 0.0,
+                "gold_per_min": ps.gold_per_min or 0.0,
+                "vision_score": ps.vision_score or 0.0,
+            })
 
-    for pos in POSITIONS:
-        for stat in POSITION_STATS:
-            vals = pos_accum[pos][stat]
-            features[f"pos_{pos}_avg_{stat}"] = sum(vals) / len(vals) if vals else 0.0
+    if player_records:
+        player_df = pd.DataFrame(player_records)
+        # Filter to valid positions and compute per-position averages
+        player_df = player_df[player_df["position"].isin(POSITIONS)]
+        pos_means = player_df.groupby("position")[POSITION_STATS].mean()
+
+        for pos in POSITIONS:
+            for stat in POSITION_STATS:
+                if pos in pos_means.index:
+                    features[f"pos_{pos}_avg_{stat}"] = float(pos_means.loc[pos, stat])
+                else:
+                    features[f"pos_{pos}_avg_{stat}"] = 0.0
+    else:
+        for pos in POSITIONS:
+            for stat in POSITION_STATS:
+                features[f"pos_{pos}_avg_{stat}"] = 0.0
 
     return features
 
 
 def compute_h2h_features(team1_id: int, team2_id: int) -> dict:
     """Compute head-to-head features between two teams.
+
+    Uses Pandas DataFrames for vectorized computation of win rates, recent form,
+    average gold differences, and game durations.
 
     Args:
         team1_id: Database ID of team 1.
@@ -389,32 +428,36 @@ def compute_h2h_features(team1_id: int, team2_id: int) -> dict:
             "avg_game_duration_vs": DEFAULT_GAME_DURATION,
         }
 
-    t1_wins = h2h_matches.filter(winner_id=team1_id).count()
-    win_rate_vs = t1_wins / total_h2h if total_h2h > 0 else DEFAULT_WIN_RATE
+    # Load all H2H matches into a DataFrame (up to 20 for stats, all for counts)
+    h2h_df = pd.DataFrame(
+        h2h_matches.values("id", "winner_id", "game_length")
+    )
 
-    # Recent form: last 5 h2h
-    recent_h2h = list(h2h_matches[:5])
-    if recent_h2h:
-        recent_wins = sum(1 for m in recent_h2h if m.winner_id == team1_id)
-        recent_form_vs = recent_wins / len(recent_h2h) if recent_h2h else DEFAULT_WIN_RATE
+    # Win rate across all H2H matches
+    win_rate_vs = float((h2h_df["winner_id"] == team1_id).mean())
+
+    # Recent form: last 5 H2H (already ordered by -date, so head)
+    recent_df = h2h_df.head(5)
+    recent_form_vs = float((recent_df["winner_id"] == team1_id).mean()) if len(recent_df) > 0 else DEFAULT_WIN_RATE
+
+    # Average game duration from up to 20 most recent H2H matches
+    top20_df = h2h_df.head(20)
+    game_lengths = top20_df["game_length"].dropna()
+    avg_game_duration = float(game_lengths.mean()) if len(game_lengths) > 0 else DEFAULT_GAME_DURATION
+
+    # Average gold difference at 15 min (team1 perspective) via single query
+    h2h_match_ids = top20_df["id"].tolist()
+    stats_df = pd.DataFrame(
+        TeamMatchStats.objects.filter(
+            match_id__in=h2h_match_ids, team_id=team1_id
+        ).values("match_id", "golddiffat15")
+    )
+
+    if len(stats_df) > 0:
+        gold_diffs = stats_df["golddiffat15"].dropna()
+        avg_gold_diff_vs = float(gold_diffs.mean()) if len(gold_diffs) > 0 else 0
     else:
-        recent_form_vs = DEFAULT_WIN_RATE
-
-    # Average game duration in H2H
-    game_lengths = [m.game_length for m in list(h2h_matches[:20]) if m.game_length]
-    avg_game_duration = sum(game_lengths) / len(game_lengths) if game_lengths else DEFAULT_GAME_DURATION
-
-    # Compute average gold difference at 15 minutes (team1 perspective)
-    # Fetch TeamMatchStats for H2H matches
-    h2h_match_ids = list(h2h_matches.values_list("id", flat=True)[:20])
-    gold_diffs = []
-
-    for match in h2h_matches[:20]:
-        t1_stats = TeamMatchStats.objects.filter(match_id=match.id, team_id=team1_id).first()
-        if t1_stats and t1_stats.golddiffat15 is not None:
-            gold_diffs.append(t1_stats.golddiffat15)
-
-    avg_gold_diff_vs = sum(gold_diffs) / len(gold_diffs) if gold_diffs else 0
+        avg_gold_diff_vs = 0
 
     return {
         "win_rate_vs": win_rate_vs,
