@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { LiveGame, DraftPoolChampion } from '@/types';
-import { LiveDot } from './LiveDot';
+import { LiveDot } from '../ui/LiveDot';
 
 const POSITIONS = ['top', 'jng', 'mid', 'bot', 'sup'] as const;
 const POS_LABELS: Record<string, string> = {

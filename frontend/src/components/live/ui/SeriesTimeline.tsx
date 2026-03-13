@@ -2,7 +2,7 @@ import { memo, useCallback } from 'react';
 import { SeriesGame } from '@/types';
 import { cn } from '@/lib/utils';
 import { LiveDot } from './LiveDot';
-import { CompletedGameScoreboard } from './CompletedGameScoreboard';
+import { CompletedGameScoreboard } from '../completed/CompletedGameScoreboard';
 
 interface SeriesTimelineProps {
   games: SeriesGame[];

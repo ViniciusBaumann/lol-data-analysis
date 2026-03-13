@@ -1,25 +1,27 @@
 // Core components
-export { GameScoreboard, HealthBar, PlayerRow } from './GameScoreboard';
-export { SeriesHeader } from './SeriesHeader';
-export { CompletedGameSummary } from './CompletedGameSummary';
-export { CompletedGameScoreboard } from './CompletedGameScoreboard';
-export { DraftDisplay } from './DraftDisplay';
+export { GameScoreboard, HealthBar, PlayerRow } from './core/GameScoreboard';
+export { SeriesHeader } from './core/SeriesHeader';
+export { DraftDisplay } from './core/DraftDisplay';
 
 // UI components
-export { LiveDot } from './LiveDot';
-export { WinProbBar } from './WinProbBar';
-export { SeriesTimeline } from './SeriesTimeline';
-export { AwaitingStartPanel } from './AwaitingStartPanel';
+export { LiveDot } from './ui/LiveDot';
+export { WinProbBar } from './ui/WinProbBar';
+export { SeriesTimeline } from './ui/SeriesTimeline';
 
 // Analytics panels
-export { LaneMatchupsPanel } from './LaneMatchupsPanel';
-export { PlayerChampionHistoryPanel } from './PlayerChampionHistoryPanel';
-export { TeamContextPanel } from './TeamContextPanel';
-export { SynergiesPanel } from './SynergiesPanel';
-export { PredictionComparisonPanel } from './PredictionComparisonPanel';
-export { ModelEstimatesPanel } from './ModelEstimatesPanel';
-export { MatchPredictionPanel } from './MatchPredictionPanel';
-export { SeriesAnalysisPanel } from './SeriesAnalysisPanel';
+export { LaneMatchupsPanel } from './panels/LaneMatchupsPanel';
+export { PlayerChampionHistoryPanel } from './panels/PlayerChampionHistoryPanel';
+export { TeamContextPanel } from './panels/TeamContextPanel';
+export { SynergiesPanel } from './panels/SynergiesPanel';
+export { PredictionComparisonPanel } from './panels/PredictionComparisonPanel';
+export { ModelEstimatesPanel } from './panels/ModelEstimatesPanel';
+export { MatchPredictionPanel } from './panels/MatchPredictionPanel';
+export { SeriesAnalysisPanel } from './panels/SeriesAnalysisPanel';
+export { AwaitingStartPanel } from './panels/AwaitingStartPanel';
+
+// Completed game components
+export { CompletedGameSummary } from './completed/CompletedGameSummary';
+export { CompletedGameScoreboard } from './completed/CompletedGameScoreboard';
 
 // Schedule view
-export { ScheduleMatchView } from './ScheduleMatchView';
+export { ScheduleMatchView } from './schedule/ScheduleMatchView';

@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Loader2, Skull, TowerControl, Flame, Clock, TrendingUp, Award, Target, Crown, Shield } from 'lucide-react';
 import { ScheduleMatch, CompareData } from '@/types';
 import { cn } from '@/lib/utils';
-import { LiveDot } from './LiveDot';
+import { LiveDot } from '../ui/LiveDot';
 
 // ---------------------------------------------------------------------------
 // Helpers
