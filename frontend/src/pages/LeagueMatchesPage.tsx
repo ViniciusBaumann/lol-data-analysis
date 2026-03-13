@@ -269,25 +269,25 @@ export default function LeagueMatchesPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-secondary/40">
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-12">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground w-12">
                         #
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">
                         Time
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">
                         ELO
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-blue-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-blue-400">
                         Blue
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-red-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-red-400">
                         Red
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">
                         Var.
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground hidden sm:table-cell">
                         Partidas
                       </th>
                     </tr>

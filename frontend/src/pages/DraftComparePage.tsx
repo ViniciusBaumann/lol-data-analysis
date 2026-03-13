@@ -319,7 +319,7 @@ export default function DraftComparePage() {
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-start">
         {/* Blue Side */}
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-blue-400 uppercase tracking-wide">
+          <h2 className="text-sm font-semibold text-blue-400 font-medium">
             Blue Side
           </h2>
           <TeamPicker
@@ -355,7 +355,7 @@ export default function DraftComparePage() {
 
         {/* Red Side */}
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-red-400 uppercase tracking-wide">
+          <h2 className="text-sm font-semibold text-red-400 font-medium">
             Red Side
           </h2>
           <TeamPicker
@@ -413,7 +413,7 @@ export default function DraftComparePage() {
         <div className="bg-card border border-border rounded-lg p-6">
           <div className="flex items-center gap-2 mb-3">
             <Crosshair size={18} className="text-primary" />
-            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+            <h3 className="text-sm font-semibold text-foreground font-medium">
               Draft Prediction
             </h3>
           </div>
@@ -436,7 +436,7 @@ export default function DraftComparePage() {
           <div className="bg-card border border-border rounded-lg p-6">
             <div className="flex items-center gap-2 mb-5">
               <Crosshair size={18} className="text-primary" />
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+              <h3 className="text-sm font-semibold text-foreground font-medium">
                 Draft Prediction
               </h3>
             </div>
@@ -451,13 +451,13 @@ export default function DraftComparePage() {
                   Red Side
                 </span>
               </div>
-              <div className="relative h-4 bg-secondary rounded-full overflow-hidden flex">
+              <div className="relative h-4 bg-secondary rounded overflow-hidden flex">
                 <div
-                  className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-500"
+                  className="h-full bg-blue-500 transition-all duration-500"
                   style={{ width: `${preds.blue_win_prob}%` }}
                 />
                 <div
-                  className="h-full bg-gradient-to-r from-red-400 to-red-600 transition-all duration-500"
+                  className="h-full bg-red-500 transition-all duration-500"
                   style={{ width: `${preds.red_win_prob}%` }}
                 />
               </div>

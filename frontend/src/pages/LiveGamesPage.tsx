@@ -74,7 +74,7 @@ function UpcomingMatchCard({ match }: { match: ScheduleMatch }) {
   return (
     <Link
       to={`/live/${match.match_id}`}
-      className="block bg-card border border-border rounded-xl overflow-hidden transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/30"
+      className="block bg-card border border-border rounded-lg overflow-hidden hover:bg-secondary/30 transition-colors"
     >
       {/* Header bar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-border/50 bg-secondary/20">
@@ -144,7 +144,7 @@ function LiveGameCard({ game }: { game: LiveGame }) {
   return (
     <Link
       to={`/live/${game.match_id}`}
-      className="block bg-card border border-border rounded-xl overflow-hidden transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/30"
+      className="block bg-card border border-border rounded-lg overflow-hidden hover:bg-secondary/30 transition-colors"
     >
       {/* Header bar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-border/50 bg-secondary/20">
@@ -161,7 +161,7 @@ function LiveGameCard({ game }: { game: LiveGame }) {
         )}
         <span className="ml-auto flex items-center gap-1.5">
           <LiveDot />
-          <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Live</span>
+          <span className="text-[10px] font-bold text-red-400">Live</span>
         </span>
       </div>
 

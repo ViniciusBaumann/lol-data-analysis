@@ -100,7 +100,7 @@ function LiveBadge() {
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
         <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
       </span>
-      <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+      <span className="text-xs font-bold text-emerald-400">
         In Game
       </span>
     </div>
@@ -354,7 +354,7 @@ export function DraftDisplay({ game, ddragonVersion }: DraftDisplayProps) {
   const hasPlayerData = players && (players.blue.length > 0 || players.red.length > 0);
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
       {/* Header with game time */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/50">
         {/* Blue team */}

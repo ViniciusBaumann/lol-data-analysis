@@ -61,7 +61,7 @@ function AwaitingStartPanelComponent({ game }: AwaitingStartPanelProps) {
   const pools = game.draft_pools;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-4 sm:px-6 sm:py-6">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-4 sm:px-6 sm:py-6">
       <div className="flex flex-col items-center justify-center gap-4">
         {/* Teams header */}
         <div className="flex items-center gap-3 sm:gap-6 mb-2">
@@ -83,7 +83,7 @@ function AwaitingStartPanelComponent({ game }: AwaitingStartPanelProps) {
         {/* Champion pools by position */}
         {pools && (
           <div className="w-full max-w-2xl">
-            <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2 text-center">
+            <p className="text-[10px] font-semibold text-zinc-500 mb-2 text-center">
               Pool de Campeoes por Posicao
             </p>
 
@@ -143,7 +143,7 @@ function AwaitingStartPanelComponent({ game }: AwaitingStartPanelProps) {
         {/* Live indicator */}
         <div className="flex items-center gap-2 mt-1">
           <LiveDot />
-          <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Ao Vivo</span>
+          <span className="text-[10px] font-bold text-red-400">Ao Vivo</span>
         </div>
       </div>
     </div>

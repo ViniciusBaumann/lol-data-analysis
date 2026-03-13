@@ -126,8 +126,8 @@ function WinRateBar({ winRate }: { winRate: number }) {
   const color = winRate >= 55 ? 'bg-green-500' : winRate >= 50 ? 'bg-green-400/70' : winRate >= 45 ? 'bg-yellow-500' : 'bg-red-500';
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
-        <div className={cn('h-full rounded-full transition-all', color)} style={{ width: `${winRate}%` }} />
+      <div className="flex-1 h-2 bg-secondary rounded overflow-hidden">
+        <div className={cn('h-full rounded transition-all', color)} style={{ width: `${winRate}%` }} />
       </div>
       <span className={cn(
         'text-xs font-bold min-w-[40px] text-right',
@@ -193,7 +193,7 @@ function SortHeader({ label, sortKey, currentKey, currentDir, onToggle, classNam
   const isActive = currentKey === sortKey;
   return (
     <th
-      className={cn('px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide cursor-pointer select-none hover:text-foreground transition-colors', className)}
+      className={cn('px-4 py-3 text-left text-xs font-semibold text-muted-foreground font-medium cursor-pointer select-none hover:text-foreground transition-colors', className)}
       onClick={() => onToggle(sortKey)}
     >
       <div className="flex items-center gap-1">
@@ -248,7 +248,7 @@ export default function ChampionMatchupsPage() {
         {/* Champion + Position row */}
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-start">
           <div className={cn(isDuos && 'opacity-50 pointer-events-none')}>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+            <label className="text-xs font-semibold text-muted-foreground font-medium mb-1.5 block">
               Champion
             </label>
             <ChampionPicker
@@ -260,7 +260,7 @@ export default function ChampionMatchupsPage() {
           </div>
 
           <div className={cn(isDuos && 'opacity-50 pointer-events-none')}>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+            <label className="text-xs font-semibold text-muted-foreground font-medium mb-1.5 block">
               Position
             </label>
             <div className="flex gap-1">
@@ -285,7 +285,7 @@ export default function ChampionMatchupsPage() {
 
         {/* Mode Tabs */}
         <div>
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+          <label className="text-xs font-semibold text-muted-foreground font-medium mb-1.5 block">
             Mode
           </label>
           <div className="flex gap-1 flex-wrap">
@@ -310,7 +310,7 @@ export default function ChampionMatchupsPage() {
         <div className="flex flex-wrap gap-4 items-end">
           {showTargetPosition && (
             <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+              <label className="text-xs font-semibold text-muted-foreground font-medium mb-1.5 block">
                 Target Position
               </label>
               <div className="flex gap-1">
@@ -344,7 +344,7 @@ export default function ChampionMatchupsPage() {
           )}
 
           <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+            <label className="text-xs font-semibold text-muted-foreground font-medium mb-1.5 block">
               Min Games
             </label>
             <input

@@ -126,7 +126,7 @@ export default function TeamDetailPage() {
             {team.leagues.map((league) => (
               <span
                 key={league.id}
-                className="px-2.5 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary border border-primary/20"
+                className="px-2 py-0.5 text-xs font-medium rounded bg-primary/10 text-primary border border-primary/20"
               >
                 {league.name}
               </span>

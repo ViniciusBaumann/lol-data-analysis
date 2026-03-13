@@ -591,7 +591,7 @@ function EloComparison({
   const t2Better = t2Global > t1Global;
 
   return (
-    <div className="mb-5 p-4 bg-gradient-to-r from-blue-500/5 via-transparent to-red-500/5 rounded-lg border border-border">
+    <div className="mb-5 p-4 bg-card rounded-lg border border-border">
       <div className="flex items-center justify-center gap-2 mb-4">
         <span className="text-sm">📊</span>
         <span className="text-xs text-muted-foreground uppercase font-medium tracking-wide">
@@ -663,7 +663,7 @@ function PredictionCard({
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-lg">🔮</span>
-          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+          <h3 className="text-sm font-semibold text-foreground">
             Match Prediction
           </h3>
         </div>
@@ -685,7 +685,7 @@ function PredictionCard({
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-lg">🔮</span>
-          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+          <h3 className="text-sm font-semibold text-foreground">
             Match Prediction
           </h3>
         </div>
@@ -719,7 +719,7 @@ function PredictionCard({
     <div className="bg-card border border-border rounded-lg p-6">
       <div className="flex items-center gap-2 mb-5">
         <span className="text-lg">🔮</span>
-        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+        <h3 className="text-sm font-semibold text-foreground">
           Match Prediction
         </h3>
       </div>
@@ -746,11 +746,11 @@ function PredictionCard({
         </div>
         <div className="relative h-4 bg-secondary rounded-full overflow-hidden flex">
           <div
-            className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-500"
+            className="h-full bg-blue-500 transition-all duration-500"
             style={{ width: `${t1Prob}%` }}
           />
           <div
-            className="h-full bg-gradient-to-r from-red-400 to-red-600 transition-all duration-500"
+            className="h-full bg-red-500 transition-all duration-500"
             style={{ width: `${t2Prob}%` }}
           />
         </div>
@@ -998,7 +998,7 @@ export default function ComparePage() {
             {/* Column 1: OVERALL */}
             <div className="bg-card border border-border rounded-lg overflow-hidden">
               <div className="px-4 py-3 border-b border-border bg-secondary/30">
-                <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+                <h3 className="text-sm font-semibold text-foreground">
                   Overall
                 </h3>
               </div>
@@ -1083,7 +1083,7 @@ export default function ComparePage() {
             {/* Column 2: RECENT FORM */}
             <div className="bg-card border border-border rounded-lg overflow-hidden">
               <div className="px-4 py-3 border-b border-border bg-secondary/30">
-                <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+                <h3 className="text-sm font-semibold text-foreground">
                   Recent Form
                 </h3>
               </div>
@@ -1363,7 +1363,7 @@ export default function ComparePage() {
             {/* Column 3: PAST FACEOFFS */}
             <div className="bg-card border border-border rounded-lg overflow-hidden">
               <div className="px-4 py-3 border-b border-border bg-secondary/30">
-                <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+                <h3 className="text-sm font-semibold text-foreground">
                   Past Faceoffs
                 </h3>
               </div>

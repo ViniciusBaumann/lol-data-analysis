@@ -30,7 +30,7 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-6 space-y-4">
+      <div className="bg-card border border-border rounded-lg p-6 space-y-4">
         <div className="flex items-center gap-2">
           <Database size={20} className="text-primary" />
           <h2 className="text-lg font-semibold text-foreground">Atualizar Dados</h2>
@@ -94,7 +94,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Mock Live Test */}
-      <div className="bg-card border border-border rounded-xl p-6 space-y-4">
+      <div className="bg-card border border-border rounded-lg p-6 space-y-4">
         <div className="flex items-center gap-2">
           <FlaskConical size={20} className="text-amber-400" />
           <h2 className="text-lg font-semibold text-foreground">Verificacao de Dados</h2>

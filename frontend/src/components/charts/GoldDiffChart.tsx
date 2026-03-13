@@ -21,7 +21,7 @@ export function GoldDiffChart({ golddiffat10, golddiffat15, xpdiffat10, xpdiffat
       <h3 className="text-sm font-medium text-foreground mb-4">Early Game Diferentials (Media)</h3>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-3">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider">Gold Diff</p>
+          <p className="text-xs font-medium text-muted-foreground">Gold Diff</p>
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted-foreground">@10 min</span>
             <span className={cn("text-lg font-bold", diffColor(golddiffat10))}>{formatDiff(golddiffat10)}</span>
@@ -32,7 +32,7 @@ export function GoldDiffChart({ golddiffat10, golddiffat15, xpdiffat10, xpdiffat
           </div>
         </div>
         <div className="space-y-3">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider">XP Diff</p>
+          <p className="text-xs font-medium text-muted-foreground">XP Diff</p>
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted-foreground">@10 min</span>
             <span className={cn("text-lg font-bold", diffColor(xpdiffat10))}>{formatDiff(xpdiffat10)}</span>

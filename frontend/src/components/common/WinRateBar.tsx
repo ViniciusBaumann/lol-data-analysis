@@ -18,8 +18,8 @@ export function WinRateBar({ winRate, label, showPercentage = true, className }:
           {showPercentage && <span className="font-medium">{winRate.toFixed(1)}%</span>}
         </div>
       )}
-      <div className="h-2 bg-secondary rounded-full overflow-hidden">
-        <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${Math.min(winRate, 100)}%` }} />
+      <div className="h-2 bg-secondary rounded overflow-hidden">
+        <div className={cn("h-full rounded transition-all", color)} style={{ width: `${Math.min(winRate, 100)}%` }} />
       </div>
     </div>
   );

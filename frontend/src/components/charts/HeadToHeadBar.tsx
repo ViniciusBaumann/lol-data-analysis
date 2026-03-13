@@ -22,11 +22,11 @@ export function HeadToHeadBar({ team1Name, team2Name, team1Stats, team2Stats }: 
       <h3 className="text-sm font-medium text-foreground mb-4">Comparacao de Stats</h3>
       <ResponsiveContainer width="100%" height={350}>
         <BarChart data={data}>
-          <XAxis dataKey="stat" tick={{ fill: 'hsl(215 20% 65%)', fontSize: 12 }} />
-          <YAxis tick={{ fill: 'hsl(215 20% 65%)', fontSize: 12 }} />
-          <Tooltip contentStyle={{ backgroundColor: 'hsl(222 47% 8%)', border: '1px solid hsl(217 33% 17%)', borderRadius: '8px', color: '#fff' }} />
-          <Legend wrapperStyle={{ color: 'hsl(215 20% 65%)' }} />
-          <Bar dataKey={team1Name} fill="#3B82F6" radius={[4, 4, 0, 0]} />
+          <XAxis dataKey="stat" tick={{ fill: '#888', fontSize: 12 }} />
+          <YAxis tick={{ fill: '#888', fontSize: 12 }} />
+          <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px', color: '#f5f5f5' }} />
+          <Legend wrapperStyle={{ color: '#888' }} />
+          <Bar dataKey={team1Name} fill="#00d4aa" radius={[4, 4, 0, 0]} />
           <Bar dataKey={team2Name} fill="#EF4444" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>

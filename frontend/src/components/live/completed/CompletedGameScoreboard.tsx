@@ -91,7 +91,7 @@ function CompletedBadge() {
   return (
     <div className="flex items-center gap-1.5 px-3 py-1 bg-zinc-700/50 rounded-md">
       <Trophy size={14} className="text-yellow-500" />
-      <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+      <span className="text-xs font-bold text-zinc-300">
         Finalizado
       </span>
     </div>
@@ -508,7 +508,7 @@ function PredictionVsResult({
       <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-800/30">
         <div className="flex items-center gap-2">
           <Target size={14} className="text-violet-400" />
-          <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+          <span className="text-xs font-bold text-zinc-300">
             Previsao vs Resultado
           </span>
         </div>
@@ -552,7 +552,7 @@ function PredictionVsResult({
                   className={cn(
                     'h-full transition-all duration-300',
                     winner === 'blue'
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-400'
+                      ? 'bg-blue-500'
                       : 'bg-blue-500/40',
                   )}
                   style={{ width: `${blueWinProb}%` }}
@@ -561,7 +561,7 @@ function PredictionVsResult({
                   className={cn(
                     'h-full transition-all duration-300',
                     winner === 'red'
-                      ? 'bg-gradient-to-r from-red-400 to-red-600'
+                      ? 'bg-red-500'
                       : 'bg-red-500/40',
                   )}
                   style={{ width: `${redWinProb}%` }}
@@ -805,7 +805,7 @@ function CompletedGameScoreboardComponent({ game, ddragonVersion }: CompletedGam
   }
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 sm:px-4 sm:py-3 border-b border-zinc-800 bg-zinc-900/50">
         {/* Blue team */}

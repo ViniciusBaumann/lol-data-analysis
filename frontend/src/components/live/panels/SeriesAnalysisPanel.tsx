@@ -109,7 +109,7 @@ function FearlessDraftSection({
     <div>
       <div className="flex items-center gap-2 mb-3">
         <Shield size={14} className="text-amber-400" />
-        <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+        <span className="text-xs font-semibold text-zinc-300">
           Fearless Draft
         </span>
         <span className="text-[10px] text-zinc-500 ml-auto">
@@ -262,7 +262,7 @@ function ObjectiveDiffSection({ diffs, totals, blueTeamCode, redTeamCode }: Obje
     <div>
       <div className="flex items-center gap-2 mb-3">
         <BarChart3 size={14} className="text-emerald-400" />
-        <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+        <span className="text-xs font-semibold text-zinc-300">
           Objetivos por Mapa
         </span>
       </div>
@@ -389,7 +389,7 @@ function MomentumSection({
     <div>
       <div className="flex items-center gap-2 mb-3">
         <Zap size={14} className="text-yellow-400" />
-        <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+        <span className="text-xs font-semibold text-zinc-300">
           Momentum & Predicao Ajustada
         </span>
       </div>
@@ -491,7 +491,7 @@ function MomentumSection({
         {adjustedPrediction && (
           <div className="bg-zinc-800/50 rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">
+              <span className="text-[10px] text-zinc-500">
                 Predicao Ajustada (proximo mapa)
               </span>
               <div className="flex items-center gap-2">
@@ -511,11 +511,11 @@ function MomentumSection({
             {/* Probability bar */}
             <div className="relative h-2.5 rounded-full overflow-hidden flex bg-zinc-700 mb-2">
               <div
-                className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-500"
+                className="h-full bg-blue-500 transition-all duration-500"
                 style={{ width: `${adjustedPrediction.adjustedBlueProbability}%` }}
               />
               <div
-                className="h-full bg-gradient-to-r from-red-400 to-red-600 transition-all duration-500"
+                className="h-full bg-red-500 transition-all duration-500"
                 style={{ width: `${100 - adjustedPrediction.adjustedBlueProbability}%` }}
               />
               {/* Base marker */}
@@ -535,7 +535,7 @@ function MomentumSection({
                 <div
                   key={i}
                   className={cn(
-                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium',
+                    'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-medium',
                     adj.value > 0
                       ? 'bg-blue-500/10 border border-blue-500/20 text-blue-400'
                       : adj.value < 0
@@ -580,7 +580,7 @@ function ObjectiveForecastSection({ forecast, blueTeamCode, redTeamCode }: Objec
     <div>
       <div className="flex items-center gap-2 mb-3">
         <Target size={14} className="text-cyan-400" />
-        <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+        <span className="text-xs font-semibold text-zinc-300">
           Previsao de Objetivos — Game {forecast.gameNumber}
         </span>
       </div>
@@ -731,7 +731,7 @@ function SeriesAnalysisPanelComponent({ game, ddragonVersion }: SeriesAnalysisPa
   }
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
       {/* Header */}
       <div className="px-3 py-2.5 sm:px-4 sm:py-3 border-b border-zinc-800 bg-zinc-800/50">
         <div className="flex items-center justify-between flex-wrap gap-1">

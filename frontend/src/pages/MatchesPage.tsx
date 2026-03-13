@@ -8,13 +8,13 @@ import {
 import { useLeagues } from '@/hooks/useLeagues';
 import { Loading } from '@/components/common/Loading';
 
-const REGION_COLORS: Record<string, string> = {
-  Korea: 'from-blue-500/20 to-blue-900/10 border-blue-500/30',
-  China: 'from-red-500/20 to-red-900/10 border-red-500/30',
-  Europe: 'from-emerald-500/20 to-emerald-900/10 border-emerald-500/30',
-  'North America': 'from-violet-500/20 to-violet-900/10 border-violet-500/30',
-  Brazil: 'from-yellow-500/20 to-yellow-900/10 border-yellow-500/30',
-  International: 'from-amber-500/20 to-amber-900/10 border-amber-500/30',
+const REGION_BORDER: Record<string, string> = {
+  Korea: 'border-l-blue-400',
+  China: 'border-l-red-400',
+  Europe: 'border-l-emerald-400',
+  'North America': 'border-l-violet-400',
+  Brazil: 'border-l-yellow-400',
+  International: 'border-l-amber-400',
 };
 
 const REGION_ACCENT: Record<string, string> = {
@@ -26,8 +26,8 @@ const REGION_ACCENT: Record<string, string> = {
   International: 'text-amber-400',
 };
 
-function getRegionColor(region: string): string {
-  return REGION_COLORS[region] || 'from-primary/20 to-primary/5 border-primary/30';
+function getRegionBorder(region: string): string {
+  return REGION_BORDER[region] || 'border-l-primary';
 }
 
 function getRegionAccent(region: string): string {
@@ -67,30 +67,27 @@ export default function MatchesPage() {
               key={league.id}
               onClick={() => navigate(`/matches/league/${league.id}`)}
               className={`
-                relative bg-gradient-to-br ${getRegionColor(league.region)}
-                border rounded-xl p-5 cursor-pointer
-                hover:scale-[1.02] hover:shadow-lg hover:shadow-black/20
-                transition-all duration-200 group
+                bg-card border border-border border-l-2 ${getRegionBorder(league.region)}
+                rounded-lg p-5 cursor-pointer
+                hover:bg-secondary/50 transition-colors group
               `}
             >
-              {/* League name */}
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <Trophy
-                    size={20}
+                    size={18}
                     className={getRegionAccent(league.region)}
                   />
-                  <h2 className="text-base font-semibold text-foreground truncate">
+                  <h2 className="text-sm font-semibold text-foreground truncate">
                     {league.name}
                   </h2>
                 </div>
                 <ChevronRight
-                  size={18}
-                  className="text-muted-foreground shrink-0 group-hover:text-foreground group-hover:translate-x-0.5 transition-all"
+                  size={16}
+                  className="text-muted-foreground shrink-0 group-hover:text-foreground transition-colors"
                 />
               </div>
 
-              {/* Region */}
               <div className="flex items-center gap-1.5 mt-3">
                 <MapPin size={13} className="text-muted-foreground" />
                 <span className="text-xs text-muted-foreground">
@@ -98,10 +95,9 @@ export default function MatchesPage() {
                 </span>
               </div>
 
-              {/* Match count */}
               <div className="mt-4 pt-3 border-t border-border/50">
                 <div className="flex items-baseline gap-1.5">
-                  <span className={`text-2xl font-bold ${getRegionAccent(league.region)}`}>
+                  <span className={`text-xl font-bold ${getRegionAccent(league.region)}`}>
                     {league.total_matches ?? 0}
                   </span>
                   <span className="text-xs text-muted-foreground">

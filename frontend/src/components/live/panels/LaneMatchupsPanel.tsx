@@ -12,8 +12,8 @@ interface LaneMatchupsPanelProps {
 
 function LaneMatchupsPanelComponent({ matchups }: LaneMatchupsPanelProps) {
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 h-full">
-      <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 h-full">
+      <p className="text-[10px] font-semibold text-zinc-500 mb-2">
         Matchups por Lane
       </p>
 

@@ -44,8 +44,8 @@ function SynergiesPanelComponent({ synergies }: SynergiesPanelProps) {
   );
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
-      <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+      <p className="text-[10px] font-semibold text-zinc-500 mb-2">
         Sinergias do Draft
       </p>
       <div className="grid grid-cols-2 gap-3">

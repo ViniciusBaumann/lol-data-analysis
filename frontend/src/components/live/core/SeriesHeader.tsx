@@ -14,7 +14,7 @@ export function SeriesHeader({ game }: SeriesHeaderProps) {
   if (!isBo) return null;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 sm:px-6 sm:py-5">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 sm:px-6 sm:py-5">
       <div className="flex items-center justify-center gap-3 sm:gap-8">
         {/* Blue team */}
         <div className="flex items-center gap-2 sm:gap-4">
@@ -40,7 +40,7 @@ export function SeriesHeader({ game }: SeriesHeaderProps) {
           </span>
           <div className="flex flex-col items-center">
             <span className="text-zinc-600 font-bold text-base sm:text-lg">:</span>
-            <span className="text-[10px] text-zinc-600 uppercase tracking-widest">
+            <span className="text-[10px] text-zinc-600">
               Bo{count}
             </span>
           </div>

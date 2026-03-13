@@ -68,7 +68,7 @@ const StatComparison = memo(function StatComparison({
       </span>
       <div className="flex items-center gap-1.5 text-zinc-500">
         {icon}
-        <span className="text-xs uppercase tracking-wide">{label}</span>
+        <span className="text-xs">{label}</span>
       </div>
       <span className={cn('text-sm font-semibold tabular-nums', winner2 ? 'text-red-400' : 'text-zinc-500')}>
         {formatValue(value2)}
@@ -97,7 +97,7 @@ function ScheduleMatchViewComponent({ match, compareData, compareLoading }: Sche
     <div className="space-y-4">
       {/* Match Header */}
       <div className={cn(
-        'bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden',
+        'bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden',
         isLive && 'border-red-500/30',
       )}>
         {/* League header */}
@@ -129,16 +129,16 @@ function ScheduleMatchViewComponent({ match, compareData, compareLoading }: Sche
             {/* VS + Status */}
             <div className="flex flex-col items-center gap-2">
               {isLive ? (
-                <span className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider bg-red-500/20 text-red-400 rounded-full flex items-center gap-1.5">
+                <span className="px-4 py-1.5 text-xs font-bold bg-red-500/20 text-red-400 rounded flex items-center gap-1.5">
                   <LiveDot />
                   Ao Vivo
                 </span>
               ) : isCompleted ? (
-                <span className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider bg-zinc-800 text-zinc-500 rounded-full">
+                <span className="px-4 py-1.5 text-xs font-bold bg-zinc-800 text-zinc-500 rounded">
                   Finalizada
                 </span>
               ) : (
-                <span className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 rounded-full">
+                <span className="px-4 py-1.5 text-xs font-bold bg-emerald-500/10 text-emerald-400 rounded">
                   A Iniciar
                 </span>
               )}
@@ -169,7 +169,7 @@ function ScheduleMatchViewComponent({ match, compareData, compareLoading }: Sche
 
       {/* Comparison Data */}
       {compareLoading && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-8 flex items-center justify-center">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-8 flex items-center justify-center">
           <Loader2 className="h-5 w-5 animate-spin text-emerald-500" />
           <span className="ml-2 text-sm text-zinc-500">Carregando comparacao...</span>
         </div>
@@ -178,10 +178,10 @@ function ScheduleMatchViewComponent({ match, compareData, compareLoading }: Sche
       {!compareLoading && compareData && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Overall Stats */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp size={14} className="text-emerald-500" />
-              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+              <p className="text-xs font-semibold text-zinc-500">
                 Estatisticas {compareData.overall.split.label}
               </p>
             </div>
@@ -213,10 +213,10 @@ function ScheduleMatchViewComponent({ match, compareData, compareLoading }: Sche
           </div>
 
           {/* Head to Head */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
               <Target size={14} className="text-emerald-500" />
-              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+              <p className="text-xs font-semibold text-zinc-500">
                 Confronto Direto
               </p>
             </div>
@@ -286,7 +286,7 @@ function ScheduleMatchViewComponent({ match, compareData, compareLoading }: Sche
       )}
 
       {!compareLoading && !compareData && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-8 text-center">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-8 text-center">
           <p className="text-sm text-zinc-600">
             Dados de comparacao indisponiveis para estes times
           </p>

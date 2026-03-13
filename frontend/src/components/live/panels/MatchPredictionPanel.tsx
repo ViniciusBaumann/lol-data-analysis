@@ -206,14 +206,14 @@ function MatchPredictionPanelComponent({
   const draftDiff = hasPredictions ? activePredictions.blue_win_prob - teamOnlyBlueProb : 0;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
       {/* Header */}
       <div className="px-3 py-2.5 sm:px-4 sm:py-3 border-b border-zinc-800 bg-zinc-800/50">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <TrendingUp size={16} className="text-emerald-400 shrink-0" />
             <span className="text-xs sm:text-sm font-semibold text-zinc-200">Predicao</span>
-            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ${draftOnlyMode ? 'bg-zinc-700 text-zinc-400' : 'bg-emerald-500/15 text-emerald-400'}`}>
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${draftOnlyMode ? 'bg-zinc-700 text-zinc-400' : 'bg-emerald-500/15 text-emerald-400'}`}>
               {draftOnlyMode ? 'Draft' : 'Draft + Ctx'}
             </span>
             {draftOnlyLoading && <Loader2 size={12} className="animate-spin text-zinc-500" />}
@@ -295,7 +295,7 @@ function MatchPredictionPanelComponent({
                   </span>
                 </div>
                 {hasComparison && Math.abs(draftDiff) >= 1 && (
-                  <div className="flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-zinc-800 border border-zinc-700">
+                  <div className="flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded bg-zinc-800 border border-zinc-700">
                     <Swords size={10} className={draftDiff > 0 ? 'text-blue-400' : 'text-red-400'} />
                     <span className="text-[9px] sm:text-[10px] text-zinc-500 hidden sm:inline">Base {teamOnlyBlueProb.toFixed(0)}%</span>
                     <span className={`text-[10px] sm:text-[11px] font-bold ${draftDiff > 0 ? 'text-blue-400' : 'text-red-400'}`}>
@@ -350,7 +350,7 @@ function MatchPredictionPanelComponent({
                   return (
                     <span
                       key={key}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-[10px] font-medium text-blue-400"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-[10px] font-medium text-blue-400"
                       title={`${compType.label}: ${Math.round(value * 100)}%`}
                     >
                       <span>{compType.icon}</span>
@@ -363,7 +363,7 @@ function MatchPredictionPanelComponent({
                   if (warning) {
                     return (
                       <span
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
                         title={warning.type === 'heavy_ap' ? 'Dano muito concentrado em AP' : 'Dano muito concentrado em AD'}
                       >
                         <span>{warning.icon}</span>
@@ -375,7 +375,7 @@ function MatchPredictionPanelComponent({
                 })()}
                 {hasNoEngage(activeComposition.blue) && (
                   <span
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
                     title="Time sem engage confiavel"
                   >
                     <span>🚫</span>
@@ -391,7 +391,7 @@ function MatchPredictionPanelComponent({
             {/* Separator */}
             <div className="flex items-center gap-1 text-zinc-600">
               <Sparkles size={12} />
-              <span className="text-[9px] uppercase tracking-wider">Comp</span>
+              <span className="text-[9px]">Comp</span>
             </div>
 
             {/* Red Composition */}
@@ -402,7 +402,7 @@ function MatchPredictionPanelComponent({
                   return (
                     <span
                       key={key}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-[10px] font-medium text-red-400"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-[10px] font-medium text-red-400"
                       title={`${compType.label}: ${Math.round(value * 100)}%`}
                     >
                       <span>{compType.icon}</span>
@@ -415,7 +415,7 @@ function MatchPredictionPanelComponent({
                   if (warning) {
                     return (
                       <span
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
                         title={warning.type === 'heavy_ap' ? 'Dano muito concentrado em AP' : 'Dano muito concentrado em AD'}
                       >
                         <span>{warning.icon}</span>
@@ -427,7 +427,7 @@ function MatchPredictionPanelComponent({
                 })()}
                 {hasNoEngage(activeComposition.red) && (
                   <span
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-[10px] font-medium text-amber-400"
                     title="Time sem engage confiavel"
                   >
                     <span>🚫</span>
@@ -448,11 +448,11 @@ function MatchPredictionPanelComponent({
             <div className="relative">
               <div className="h-3 rounded-full overflow-hidden flex bg-zinc-800">
                 <div
-                  className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-500"
+                  className="h-full bg-blue-500 transition-all duration-500"
                   style={{ width: `${activePredictions.blue_win_prob}%` }}
                 />
                 <div
-                  className="h-full bg-gradient-to-r from-red-400 to-red-600 transition-all duration-500"
+                  className="h-full bg-red-500 transition-all duration-500"
                   style={{ width: `${activePredictions.red_win_prob}%` }}
                 />
               </div>
@@ -473,7 +473,7 @@ function MatchPredictionPanelComponent({
             {/* Key Factors - Fatores Decisivos (hidden in draft-only mode) */}
             {!draftOnlyMode && hasTeamContext && (
               <div className="pt-2">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Fatores Decisivos</p>
+                <p className="text-[10px] text-zinc-500 mb-2">Fatores Decisivos</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                   {/* Draft Impact */}
                   {hasComparison && (() => {

@@ -36,9 +36,9 @@ function SeriesTimelineComponent({ games, ddragonVersion, selectedGameNumber, on
   }, [selectedGameNumber, onSelectGame]);
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
       <div className="flex items-center gap-1.5 mb-4">
-        <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+        <span className="text-xs font-semibold text-zinc-500">
           Serie
         </span>
         <div className="flex-1 h-px bg-zinc-800" />

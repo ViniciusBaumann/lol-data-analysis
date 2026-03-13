@@ -15,8 +15,8 @@ function ModelEstimatesPanelComponent({ predictions }: ModelEstimatesPanelProps)
   ];
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-      <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+      <p className="text-xs font-semibold text-zinc-500 mb-1">
         Estimativas do Modelo
       </p>
       <p className="text-[10px] text-zinc-600 mb-3">

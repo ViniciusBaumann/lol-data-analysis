@@ -233,16 +233,16 @@ export default function MatchDetailPage() {
               </span>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
-              <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary">
+              <span className="px-2 py-0.5 text-xs rounded bg-primary/10 text-primary">
                 {match.league.name}
               </span>
               {match.patch && (
-                <span className="px-2 py-0.5 text-xs rounded-full bg-secondary text-muted-foreground">
+                <span className="px-2 py-0.5 text-xs rounded bg-secondary text-muted-foreground">
                   Patch {match.patch}
                 </span>
               )}
               {match.playoffs && (
-                <span className="px-2 py-0.5 text-xs rounded-full bg-amber-500/20 text-amber-400">
+                <span className="px-2 py-0.5 text-xs rounded bg-amber-500/20 text-amber-400">
                   Playoffs
                 </span>
               )}
@@ -435,7 +435,7 @@ export default function MatchDetailPage() {
                 <tr className="bg-blue-500/10">
                   <td
                     colSpan={9}
-                    className="py-2 px-3 text-xs font-bold text-blue-400 uppercase tracking-wide"
+                    className="py-2 px-3 text-xs font-bold text-blue-400 font-medium"
                   >
                     <div className="flex items-center gap-2">
                       <Shield size={14} />
@@ -458,7 +458,7 @@ export default function MatchDetailPage() {
                 <tr className="bg-red-500/10">
                   <td
                     colSpan={9}
-                    className="py-2 px-3 text-xs font-bold text-red-400 uppercase tracking-wide"
+                    className="py-2 px-3 text-xs font-bold text-red-400 font-medium"
                   >
                     <div className="flex items-center gap-2">
                       <Shield size={14} />

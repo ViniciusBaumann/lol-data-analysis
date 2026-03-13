@@ -147,25 +147,25 @@ export default function LeagueTeamsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-secondary/40">
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-12">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground w-12">
                         #
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">
                         Time
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">
                         ELO
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-blue-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-blue-400">
                         Blue
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-red-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-red-400">
                         Red
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">
                         Var.
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground hidden sm:table-cell">
                         Partidas
                       </th>
                     </tr>
@@ -253,7 +253,7 @@ export default function LeagueTeamsPage() {
                       className="bg-card border border-border rounded-lg p-4 hover:bg-secondary/30 hover:border-primary/50 transition-all cursor-pointer group"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center shrink-0">
+                        <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center shrink-0">
                           <Users size={18} className="text-primary" />
                         </div>
                         <div className="min-w-0">

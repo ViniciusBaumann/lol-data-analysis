@@ -25,12 +25,12 @@ export function ObjectivesRadar({ data, label = 'Objetivos' }: ObjectivesRadarPr
       <h3 className="text-sm font-medium text-foreground mb-4">{label}</h3>
       <ResponsiveContainer width="100%" height={300}>
         <RadarChart data={chartData}>
-          <PolarGrid stroke="hsl(217 33% 25%)" />
-          <PolarAngleAxis dataKey="subject" tick={{ fill: 'hsl(215 20% 65%)', fontSize: 12 }} />
-          <PolarRadiusAxis tick={{ fill: 'hsl(215 20% 65%)', fontSize: 10 }} />
-          <Radar name={label} dataKey="value" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.3} />
+          <PolarGrid stroke="#2a2a2a" />
+          <PolarAngleAxis dataKey="subject" tick={{ fill: '#888', fontSize: 12 }} />
+          <PolarRadiusAxis tick={{ fill: '#888', fontSize: 10 }} />
+          <Radar name={label} dataKey="value" stroke="#00d4aa" fill="#00d4aa" fillOpacity={0.3} />
           <Tooltip
-            contentStyle={{ backgroundColor: 'hsl(222 47% 8%)', border: '1px solid hsl(217 33% 17%)', borderRadius: '8px', color: '#fff' }}
+            contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px', color: '#f5f5f5' }}
           />
         </RadarChart>
       </ResponsiveContainer>

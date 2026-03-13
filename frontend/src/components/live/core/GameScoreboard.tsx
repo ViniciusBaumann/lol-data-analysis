@@ -55,7 +55,7 @@ function LiveBadge({ statsDisabled }: { statsDisabled?: boolean }) {
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
         </span>
-        <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+        <span className="text-xs font-bold text-emerald-400">
           In Game
         </span>
       </div>
@@ -86,10 +86,10 @@ export function HealthBar({ current, max }: { current: number; max: number }) {
           dead
             ? 'bg-zinc-700'
             : pct > 50
-            ? 'bg-gradient-to-r from-emerald-600 to-emerald-500'
+            ? 'bg-emerald-500'
             : pct > 25
-            ? 'bg-gradient-to-r from-yellow-600 to-yellow-500'
-            : 'bg-gradient-to-r from-red-600 to-red-500',
+            ? 'bg-yellow-500'
+            : 'bg-red-500',
         )}
         style={{ width: `${dead ? 0 : pct}%` }}
       />
@@ -203,10 +203,10 @@ function MobilePlayerRow({ player, goldDiff, ddragonVersion, side, isLast }: Pla
 function MobileColumnHeaders() {
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 border-b border-zinc-800 bg-zinc-900/50">
-      <span className="text-[9px] text-zinc-500 uppercase font-medium tracking-wider flex-1" />
-      <span className="text-[9px] text-zinc-500 uppercase font-medium tracking-wider">CS</span>
-      <span className="text-[9px] text-zinc-500 uppercase font-medium tracking-wider">KDA</span>
-      <span className="text-[9px] text-zinc-500 uppercase font-medium tracking-wider text-right w-10">+/-</span>
+      <span className="text-[9px] text-zinc-500 font-medium flex-1" />
+      <span className="text-[9px] text-zinc-500 font-medium">CS</span>
+      <span className="text-[9px] text-zinc-500 font-medium">KDA</span>
+      <span className="text-[9px] text-zinc-500 font-medium text-right w-10">+/-</span>
     </div>
   );
 }
@@ -389,15 +389,15 @@ function TeamStatsBar({ kills, gold, towers, dragons, barons, inhibitors, side }
 function ColumnHeaders() {
   return (
     <div className="grid grid-cols-[160px_150px_180px_55px_35px_35px_35px_75px_70px] gap-x-3 items-center px-4 py-2 border-b border-zinc-800 bg-zinc-900/50">
-      <span className="text-[10px] text-zinc-500 uppercase font-medium tracking-wider" />
-      <span className="text-[10px] text-zinc-500 uppercase font-medium tracking-wider">Health</span>
-      <span className="text-[10px] text-zinc-500 uppercase font-medium tracking-wider">Items</span>
-      <span className="text-[10px] text-zinc-500 uppercase font-medium tracking-wider text-center">CS</span>
-      <span className="text-[10px] text-zinc-500 uppercase font-medium tracking-wider text-center">K</span>
-      <span className="text-[10px] text-zinc-500 uppercase font-medium tracking-wider text-center">D</span>
-      <span className="text-[10px] text-zinc-500 uppercase font-medium tracking-wider text-center">A</span>
-      <span className="text-[10px] text-zinc-500 uppercase font-medium tracking-wider text-right">Gold</span>
-      <span className="text-[10px] text-zinc-500 uppercase font-medium tracking-wider text-right">+/-</span>
+      <span className="text-[10px] text-zinc-500 font-medium" />
+      <span className="text-[10px] text-zinc-500 font-medium">Health</span>
+      <span className="text-[10px] text-zinc-500 font-medium">Items</span>
+      <span className="text-[10px] text-zinc-500 font-medium text-center">CS</span>
+      <span className="text-[10px] text-zinc-500 font-medium text-center">K</span>
+      <span className="text-[10px] text-zinc-500 font-medium text-center">D</span>
+      <span className="text-[10px] text-zinc-500 font-medium text-center">A</span>
+      <span className="text-[10px] text-zinc-500 font-medium text-right">Gold</span>
+      <span className="text-[10px] text-zinc-500 font-medium text-right">+/-</span>
     </div>
   );
 }
@@ -423,7 +423,7 @@ function TeamHeader({
       )}
     >
       {teamImage && <img src={teamImage} alt="" className="h-5 w-5 object-contain" />}
-      <span className={cn('text-xs font-bold uppercase tracking-wide', side === 'blue' ? 'text-blue-400' : 'text-red-400')}>
+      <span className={cn('text-xs font-bold', side === 'blue' ? 'text-blue-400' : 'text-red-400')}>
         {teamCode}
       </span>
     </div>
@@ -449,7 +449,7 @@ export function GameScoreboard({ game, ddragonVersion }: GameScoreboardProps) {
   const statsDisabled = !hasStats && !hasPlayers;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
       {/* Header: Teams + IN GAME badge + Time */}
       <div className="flex items-center justify-between px-3 py-3 sm:px-6 sm:py-5 border-b border-zinc-800">
         {/* Blue team */}

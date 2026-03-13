@@ -77,7 +77,7 @@ function StatRow({
       </span>
       <div className="flex items-center gap-1.5 text-zinc-500">
         {icon}
-        <span className="text-[10px] uppercase tracking-wide">{label}</span>
+        <span className="text-[10px]">{label}</span>
       </div>
       <span
         className={cn(
@@ -209,7 +209,7 @@ export function CompletedGameSummary({ game, ddragonVersion }: CompletedGameSumm
       {/* Final Stats Summary */}
       {fs && (
         <div className="bg-zinc-900/50 rounded-lg p-3 space-y-1.5">
-          <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
+          <p className="text-[10px] font-semibold text-zinc-500 mb-2">
             Resumo
           </p>
           <StatRow
@@ -299,7 +299,7 @@ export function CompletedGameSummary({ game, ddragonVersion }: CompletedGameSumm
       {/* Draft fallback (no player data) */}
       {!hasPlayers && game.draft && (
         <div>
-          <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
+          <p className="text-[10px] font-semibold text-zinc-500 mb-2">
             Draft
           </p>
           <div className="grid grid-cols-[1fr_auto_1fr] gap-x-4 gap-y-0.5 text-[11px]">

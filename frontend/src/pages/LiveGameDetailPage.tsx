@@ -78,7 +78,7 @@ const PageHeader = memo(function PageHeader({
             <span className="text-xs sm:text-sm text-zinc-600 shrink-0">{boLabel(game.strategy)}</span>
             <div className="flex items-center gap-1.5 shrink-0">
               <LiveDot />
-              <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Live</span>
+              <span className="text-[10px] font-bold text-red-400">Live</span>
             </div>
           </>
         )}
@@ -254,7 +254,7 @@ const GameContent = memo(function GameContent({ game }: GameContentProps) {
 
               {/* No stats message - only show if stats not enabled for this league */}
               {!isCurrentGameCompleted && !game.live_stats && !game.stats_enabled && game.draft && (
-                <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3">
                   <p className="text-xs text-zinc-600 text-center">
                     Placar ao vivo indisponivel para esta liga
                   </p>

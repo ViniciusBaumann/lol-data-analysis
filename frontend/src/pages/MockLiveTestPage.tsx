@@ -475,7 +475,7 @@ export default function MockLiveTestPage() {
 
       {/* Series Header */}
       {hasSeries && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-6 py-5">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-6 py-5">
           <div className="flex items-center justify-center gap-8">
             <div className="flex items-center gap-4">
               {game.blue_team.image && (
@@ -489,7 +489,7 @@ export default function MockLiveTestPage() {
               </span>
               <div className="flex flex-col items-center">
                 <span className="text-zinc-600 font-bold text-lg">:</span>
-                <span className="text-[10px] text-zinc-600 uppercase tracking-widest">Bo3</span>
+                <span className="text-[10px] text-zinc-600">Bo3</span>
               </div>
               <span className="text-4xl font-black tabular-nums text-red-400">
                 {game.red_team.result?.gameWins ?? 0}
@@ -551,7 +551,7 @@ export default function MockLiveTestPage() {
       </div>
 
       {/* Data Summary */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
         <p className="text-xs font-semibold text-zinc-400 mb-3">Dados Mockados Incluidos</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
           {[

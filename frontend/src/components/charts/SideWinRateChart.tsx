@@ -3,15 +3,16 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 interface SideWinRateChartProps {
   blueWins: number;
   redWins: number;
+  total?: number;
 }
 
-export function SideWinRateChart({ blueWins, redWins }: SideWinRateChartProps) {
+export function SideWinRateChart({ blueWins, redWins, total: totalProp }: SideWinRateChartProps) {
   const data = [
     { name: 'Blue Side', value: blueWins },
     { name: 'Red Side', value: redWins },
   ];
   const COLORS = ['#3B82F6', '#EF4444'];
-  const total = blueWins + redWins;
+  const total = totalProp ?? blueWins + redWins;
 
   if (total === 0) return <p className="text-muted-foreground text-sm text-center py-8">Sem dados</p>;
 
@@ -24,10 +25,10 @@ export function SideWinRateChart({ blueWins, redWins }: SideWinRateChartProps) {
             {data.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
           </Pie>
           <Tooltip
-            contentStyle={{ backgroundColor: 'hsl(222 47% 8%)', border: '1px solid hsl(217 33% 17%)', borderRadius: '8px', color: '#fff' }}
+            contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px', color: '#f5f5f5' }}
             formatter={(value: number, name: string) => [`${value} (${((value / total) * 100).toFixed(1)}%)`, name]}
           />
-          <Legend wrapperStyle={{ color: 'hsl(215 20% 65%)' }} />
+          <Legend wrapperStyle={{ color: '#888' }} />
         </PieChart>
       </ResponsiveContainer>
     </div>

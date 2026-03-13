@@ -14,12 +14,12 @@ export function LeagueDistributionChart({ data }: LeagueDistributionChartProps) 
       <h3 className="text-sm font-medium text-foreground mb-4">Partidas por Liga</h3>
       <ResponsiveContainer width="100%" height={Math.max(300, chartData.length * 30)}>
         <BarChart data={chartData} layout="vertical" margin={{ left: 80 }}>
-          <XAxis type="number" tick={{ fill: 'hsl(215 20% 65%)', fontSize: 12 }} />
-          <YAxis type="category" dataKey="league_name" tick={{ fill: 'hsl(215 20% 65%)', fontSize: 11 }} width={75} />
+          <XAxis type="number" tick={{ fill: '#888', fontSize: 12 }} />
+          <YAxis type="category" dataKey="league_name" tick={{ fill: '#888', fontSize: 11 }} width={75} />
           <Tooltip
-            contentStyle={{ backgroundColor: 'hsl(222 47% 8%)', border: '1px solid hsl(217 33% 17%)', borderRadius: '8px', color: '#fff' }}
+            contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px', color: '#f5f5f5' }}
           />
-          <Bar dataKey="match_count" fill="#3B82F6" radius={[0, 4, 4, 0]} name="Partidas" />
+          <Bar dataKey="match_count" fill="#00d4aa" radius={[0, 4, 4, 0]} name="Partidas" />
         </BarChart>
       </ResponsiveContainer>
     </div>

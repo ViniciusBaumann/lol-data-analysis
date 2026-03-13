@@ -10,8 +10,8 @@ function PredictionComparisonPanelComponent({ draftPred, matchPred }: Prediction
   if (matchPred.error || matchPred.blue_win_prob === undefined) return null;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-      <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+      <p className="text-xs font-semibold text-zinc-500 mb-3">
         Comparacao de Modelos
       </p>
       <div className="grid grid-cols-2 gap-4">
@@ -23,8 +23,8 @@ function PredictionComparisonPanelComponent({ draftPred, matchPred }: Prediction
             <span className="text-red-400">{draftPred.red_win_prob}%</span>
           </div>
           <div className="h-2 rounded-full overflow-hidden flex bg-zinc-800">
-            <div className="h-full bg-gradient-to-r from-blue-600 to-blue-400" style={{ width: `${draftPred.blue_win_prob}%` }} />
-            <div className="h-full bg-gradient-to-r from-red-400 to-red-600" style={{ width: `${draftPred.red_win_prob}%` }} />
+            <div className="h-full bg-blue-500" style={{ width: `${draftPred.blue_win_prob}%` }} />
+            <div className="h-full bg-red-500" style={{ width: `${draftPred.red_win_prob}%` }} />
           </div>
         </div>
 
@@ -36,8 +36,8 @@ function PredictionComparisonPanelComponent({ draftPred, matchPred }: Prediction
             <span className="text-red-400">{matchPred.red_win_prob}%</span>
           </div>
           <div className="h-2 rounded-full overflow-hidden flex bg-zinc-800">
-            <div className="h-full bg-gradient-to-r from-blue-600 to-blue-400" style={{ width: `${matchPred.blue_win_prob}%` }} />
-            <div className="h-full bg-gradient-to-r from-red-400 to-red-600" style={{ width: `${matchPred.red_win_prob}%` }} />
+            <div className="h-full bg-blue-500" style={{ width: `${matchPred.blue_win_prob}%` }} />
+            <div className="h-full bg-red-500" style={{ width: `${matchPred.red_win_prob}%` }} />
           </div>
         </div>
       </div>
