@@ -1,7 +1,6 @@
 import logging
 from collections import defaultdict
-from itertools import combinations
-
+import pandas as pd
 import requests as http_requests
 from django.core.management import call_command
 from django.db.models import Avg, Count, F, IntegerField, Q, Sum
@@ -1441,14 +1440,14 @@ class ChampionMatchupsView(APIView):
             return self._duos(min_games)
 
         # Find all matches where the champion played in the given position
-        my_pms = PlayerMatchStats.objects.filter(
+        my_pms_qs = PlayerMatchStats.objects.filter(
             champion__iexact=champion, position__iexact=position
-        ).select_related("match")
+        )
+        my_df = pd.DataFrame(
+            my_pms_qs.values("match_id", "team_id"),
+        )
 
-        my_matches_dict = {pms.match_id: pms.team_id for pms in my_pms}
-        match_ids = list(my_matches_dict.keys())
-
-        if not match_ids:
+        if my_df.empty:
             return Response({
                 "champion": champion,
                 "position": position,
@@ -1456,17 +1455,21 @@ class ChampionMatchupsView(APIView):
                 "results": [],
             })
 
+        my_df = my_df.rename(columns={"team_id": "my_team_id"})
+        match_ids = my_df["match_id"].unique().tolist()
+
         # Pre-load winner info for all relevant matches
-        winner_map = dict(
-            Match.objects.filter(id__in=match_ids).values_list("id", "winner_id")
+        winners_df = pd.DataFrame(
+            Match.objects.filter(id__in=match_ids).values_list("id", "winner_id"),
+            columns=["match_id", "winner_id"],
         )
 
         if mode == "direct":
-            results = self._direct(match_ids, my_matches_dict, winner_map, position, champion, min_games)
+            results = self._direct(match_ids, my_df, winners_df, position, champion, min_games)
         elif mode == "indirect":
-            results = self._indirect(match_ids, my_matches_dict, winner_map, position, champion, target_position, min_games)
+            results = self._indirect(match_ids, my_df, winners_df, position, champion, target_position, min_games)
         else:  # synergy
-            results = self._synergy(match_ids, my_matches_dict, winner_map, position, champion, target_position, min_games)
+            results = self._synergy(match_ids, my_df, winners_df, position, champion, target_position, min_games)
 
         return Response({
             "champion": champion,
@@ -1475,25 +1478,62 @@ class ChampionMatchupsView(APIView):
             "results": results,
         })
 
-    def _direct(self, match_ids, my_matches_dict, winner_map, position, champion, min_games):
+    @staticmethod
+    def _build_matchup_results(grouped_df, min_games):
+        """Build a sorted list of result dicts from a grouped DataFrame.
+
+        Args:
+            grouped_df: DataFrame with columns 'champion', 'position',
+                        'games', and 'wins'.
+            min_games: Minimum number of games to include a result.
+
+        Returns:
+            List of dicts sorted by (-win_rate, -games).
+        """
+        filtered = grouped_df[grouped_df["games"] >= min_games].copy()
+        if filtered.empty:
+            return []
+        filtered["losses"] = filtered["games"] - filtered["wins"]
+        filtered["win_rate"] = (filtered["wins"] / filtered["games"] * 100).round(1)
+        filtered = filtered.sort_values(
+            ["win_rate", "games"], ascending=[False, False]
+        )
+        return filtered[
+            ["champion", "position", "games", "wins", "losses", "win_rate"]
+        ].to_dict("records")
+
+    def _direct(self, match_ids, my_df, winners_df, position, champion, min_games):
         """Direct matchup: same position, opposite team."""
-        opponent_pms = PlayerMatchStats.objects.filter(
+        opp_qs = PlayerMatchStats.objects.filter(
             match_id__in=match_ids, position__iexact=position
         ).exclude(champion__iexact=champion)
+        opp_df = pd.DataFrame(
+            opp_qs.values("match_id", "team_id", "champion"),
+        )
+        if opp_df.empty:
+            return []
 
-        agg = defaultdict(lambda: {"games": 0, "wins": 0})
-        for opp in opponent_pms:
-            my_team = my_matches_dict.get(opp.match_id)
-            if my_team is None or opp.team_id == my_team:
-                continue
-            won = winner_map.get(opp.match_id) == my_team
-            agg[opp.champion]["games"] += 1
-            if won:
-                agg[opp.champion]["wins"] += 1
+        # Merge opponent records with my team info and winner info
+        merged = opp_df.merge(my_df, on="match_id")
+        merged = merged.merge(winners_df, on="match_id")
 
-        return self._format_results(agg, position, min_games)
+        # Keep only opponents on the opposite team
+        merged = merged[merged["team_id"] != merged["my_team_id"]]
+        if merged.empty:
+            return []
 
-    def _indirect(self, match_ids, my_matches_dict, winner_map, position, champion, target_position, min_games):
+        merged["won"] = merged["my_team_id"] == merged["winner_id"]
+
+        grouped = (
+            merged.groupby("champion", as_index=False)
+            .agg(games=("won", "size"), wins=("won", "sum"))
+        )
+        grouped["wins"] = grouped["wins"].astype(int)
+        grouped["position"] = position
+
+        return self._build_matchup_results(grouped, min_games)
+
+    def _indirect(self, match_ids, my_df, winners_df, position, champion, target_position, min_games):
         """Indirect matchup: different position, opposite team."""
         qs = PlayerMatchStats.objects.filter(match_id__in=match_ids).exclude(
             champion__iexact=champion
@@ -1503,37 +1543,31 @@ class ChampionMatchupsView(APIView):
         else:
             qs = qs.exclude(position__iexact=position)
 
-        agg = defaultdict(lambda: {"games": 0, "wins": 0, "position": ""})
-        for pms in qs:
-            my_team = my_matches_dict.get(pms.match_id)
-            if my_team is None or pms.team_id == my_team:
-                continue
-            won = winner_map.get(pms.match_id) == my_team
-            key = (pms.champion, pms.position)
-            agg[key]["games"] += 1
-            agg[key]["position"] = pms.position
-            if won:
-                agg[key]["wins"] += 1
+        other_df = pd.DataFrame(
+            qs.values("match_id", "team_id", "champion", "position"),
+        )
+        if other_df.empty:
+            return []
 
-        results = []
-        for (champ, pos), data in agg.items():
-            if data["games"] < min_games:
-                continue
-            games = data["games"]
-            wins = data["wins"]
-            results.append({
-                "champion": champ,
-                "position": pos,
-                "games": games,
-                "wins": wins,
-                "losses": games - wins,
-                "win_rate": round((wins / games) * 100, 1),
-            })
+        merged = other_df.merge(my_df, on="match_id")
+        merged = merged.merge(winners_df, on="match_id")
 
-        results.sort(key=lambda x: (-x["win_rate"], -x["games"]))
-        return results
+        # Opposite team
+        merged = merged[merged["team_id"] != merged["my_team_id"]]
+        if merged.empty:
+            return []
 
-    def _synergy(self, match_ids, my_matches_dict, winner_map, position, champion, target_position, min_games):
+        merged["won"] = merged["my_team_id"] == merged["winner_id"]
+
+        grouped = (
+            merged.groupby(["champion", "position"], as_index=False)
+            .agg(games=("won", "size"), wins=("won", "sum"))
+        )
+        grouped["wins"] = grouped["wins"].astype(int)
+
+        return self._build_matchup_results(grouped, min_games)
+
+    def _synergy(self, match_ids, my_df, winners_df, position, champion, target_position, min_games):
         """Synergy: different position, same team."""
         qs = PlayerMatchStats.objects.filter(match_id__in=match_ids).exclude(
             champion__iexact=champion
@@ -1543,109 +1577,97 @@ class ChampionMatchupsView(APIView):
         else:
             qs = qs.exclude(position__iexact=position)
 
-        agg = defaultdict(lambda: {"games": 0, "wins": 0, "position": ""})
-        for pms in qs:
-            my_team = my_matches_dict.get(pms.match_id)
-            if my_team is None or pms.team_id != my_team:
-                continue
-            won = winner_map.get(pms.match_id) == my_team
-            key = (pms.champion, pms.position)
-            agg[key]["games"] += 1
-            agg[key]["position"] = pms.position
-            if won:
-                agg[key]["wins"] += 1
+        other_df = pd.DataFrame(
+            qs.values("match_id", "team_id", "champion", "position"),
+        )
+        if other_df.empty:
+            return []
 
-        results = []
-        for (champ, pos), data in agg.items():
-            if data["games"] < min_games:
-                continue
-            games = data["games"]
-            wins = data["wins"]
-            results.append({
-                "champion": champ,
-                "position": pos,
-                "games": games,
-                "wins": wins,
-                "losses": games - wins,
-                "win_rate": round((wins / games) * 100, 1),
-            })
+        merged = other_df.merge(my_df, on="match_id")
+        merged = merged.merge(winners_df, on="match_id")
 
-        results.sort(key=lambda x: (-x["win_rate"], -x["games"]))
-        return results
+        # Same team
+        merged = merged[merged["team_id"] == merged["my_team_id"]]
+        if merged.empty:
+            return []
+
+        merged["won"] = merged["my_team_id"] == merged["winner_id"]
+
+        grouped = (
+            merged.groupby(["champion", "position"], as_index=False)
+            .agg(games=("won", "size"), wins=("won", "sum"))
+        )
+        grouped["wins"] = grouped["wins"].astype(int)
+
+        return self._build_matchup_results(grouped, min_games)
 
     def _duos(self, min_games):
         """Best duo pairs: same team, highest win rate."""
-        all_pms = (
+        df = pd.DataFrame(
             PlayerMatchStats.objects.all()
             .values("match_id", "team_id", "champion", "position")
         )
-
-        # Group by (match_id, team_id)
-        match_teams = defaultdict(list)
-        for pms in all_pms:
-            match_teams[(pms["match_id"], pms["team_id"])].append(
-                (pms["champion"], pms["position"])
-            )
+        if df.empty:
+            return Response({"mode": "duos", "results": []})
 
         # Pre-load winners
-        match_ids = set(k[0] for k in match_teams.keys())
-        winner_map = dict(
-            Match.objects.filter(id__in=match_ids).values_list("id", "winner_id")
+        match_ids = df["match_id"].unique().tolist()
+        winners_df = pd.DataFrame(
+            Match.objects.filter(id__in=match_ids).values_list("id", "winner_id"),
+            columns=["match_id", "winner_id"],
         )
 
-        agg = defaultdict(lambda: {"games": 0, "wins": 0})
-        for (match_id, team_id), players in match_teams.items():
-            won = winner_map.get(match_id) == team_id
-            for (c1, p1), (c2, p2) in combinations(players, 2):
-                # Canonical ordering to avoid duplicates
-                if (c1, p1) > (c2, p2):
-                    c1, p1, c2, p2 = c2, p2, c1, p1
-                key = (c1, p1, c2, p2)
-                agg[key]["games"] += 1
-                if won:
-                    agg[key]["wins"] += 1
+        df = df.merge(winners_df, on="match_id")
+        df["won"] = df["team_id"] == df["winner_id"]
 
-        results = []
-        for (c1, p1, c2, p2), data in agg.items():
-            if data["games"] < min_games:
-                continue
-            games = data["games"]
-            wins = data["wins"]
-            results.append({
-                "champion1": c1,
-                "position1": p1,
-                "champion2": c2,
-                "position2": p2,
-                "games": games,
-                "wins": wins,
-                "losses": games - wins,
-                "win_rate": round((wins / games) * 100, 1),
-            })
+        # Self-join to produce all teammate pairs within (match, team)
+        pairs = df.merge(df, on=["match_id", "team_id", "won"], suffixes=("_1", "_2"))
 
-        results.sort(key=lambda x: (-x["win_rate"], -x["games"]))
+        # Build canonical key columns for deduplication: champion_1 < champion_2
+        # (with position used as tiebreaker when champions are equal)
+        key1 = pairs["champion_1"] + "|" + pairs["position_1"]
+        key2 = pairs["champion_2"] + "|" + pairs["position_2"]
+        pairs = pairs[key1 < key2]
+
+        if pairs.empty:
+            return Response({"mode": "duos", "results": []})
+
+        grouped = (
+            pairs.groupby(
+                ["champion_1", "position_1", "champion_2", "position_2"],
+                as_index=False,
+            )
+            .agg(games=("won", "size"), wins=("won", "sum"))
+        )
+        grouped["wins"] = grouped["wins"].astype(int)
+
+        filtered = grouped[grouped["games"] >= min_games].copy()
+        if filtered.empty:
+            return Response({"mode": "duos", "results": []})
+
+        filtered["losses"] = filtered["games"] - filtered["wins"]
+        filtered["win_rate"] = (filtered["wins"] / filtered["games"] * 100).round(1)
+        filtered = filtered.sort_values(
+            ["win_rate", "games"], ascending=[False, False]
+        ).head(50)
+
+        results = (
+            filtered.rename(columns={
+                "champion_1": "champion1",
+                "position_1": "position1",
+                "champion_2": "champion2",
+                "position_2": "position2",
+            })[
+                ["champion1", "position1", "champion2", "position2",
+                 "games", "wins", "losses", "win_rate"]
+            ]
+            .to_dict("records")
+        )
+
         return Response({
             "mode": "duos",
-            "results": results[:50],
+            "results": results,
         })
-
-    def _format_results(self, agg, position, min_games):
-        """Format aggregated results for direct matchup mode."""
-        results = []
-        for champ, data in agg.items():
-            if data["games"] < min_games:
-                continue
-            games = data["games"]
-            wins = data["wins"]
-            results.append({
-                "champion": champ,
-                "position": position,
-                "games": games,
-                "wins": wins,
-                "losses": games - wins,
-                "win_rate": round((wins / games) * 100, 1),
-            })
-        results.sort(key=lambda x: (-x["win_rate"], -x["games"]))
-        return results
 
 
 class LiveGamesView(APIView):
