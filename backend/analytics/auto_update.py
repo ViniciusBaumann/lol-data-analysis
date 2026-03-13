@@ -120,6 +120,18 @@ def auto_update_oracle_data(year: int = None, force_download: bool = True):
         import_log.completed_at = timezone.now()
         import_log.save()
         logger.exception("Auto-update import failed: %s", e)
+        return
+
+    # Run reconciliation after successful import
+    try:
+        from analytics.etl.pipeline import run_reconciliation
+        log = run_reconciliation(triggered_by="auto_update")
+        logger.info(
+            "Auto-update reconciliation: %s (%d/%d passed)",
+            log.status, log.passed_checks, log.total_checks,
+        )
+    except Exception as e:
+        logger.exception("Auto-update reconciliation failed: %s", e)
 
 
 def _download_csv(year: int, expected_path: Path) -> pd.DataFrame:

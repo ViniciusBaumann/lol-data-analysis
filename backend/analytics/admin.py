@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     DataImportLog,
+    DataReconciliationLog,
     League,
     Match,
     Player,
@@ -77,3 +78,13 @@ class DataImportLogAdmin(admin.ModelAdmin):
     list_display = ("year", "status", "matches_created", "started_at")
     list_filter = ("status", "year")
     readonly_fields = ("started_at",)
+
+
+@admin.register(DataReconciliationLog)
+class DataReconciliationLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "status", "triggered_by", "total_checks", "passed_checks",
+        "warning_checks", "failed_checks", "started_at",
+    )
+    list_filter = ("status", "triggered_by")
+    readonly_fields = ("started_at", "results")
