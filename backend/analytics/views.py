@@ -39,6 +39,7 @@ LOL_ESPORTS_BASE_URL = "https://esports-api.lolesports.com/persisted/gw"
 
 from .models import (
     DataImportLog,
+    DataReconciliationLog,
     League,
     Match,
     Player,
@@ -49,6 +50,7 @@ from .models import (
 )
 from .serializers import (
     DataImportLogSerializer,
+    DataReconciliationLogSerializer,
     LeagueSerializer,
     MatchDetailSerializer,
     MatchListSerializer,
@@ -1862,3 +1864,62 @@ class EloRatingsView(APIView):
             })
 
         return Response(ratings)
+
+
+class DataHealthView(APIView):
+    """Data health endpoint: latest reconciliation status and summary stats."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        """Return data health overview.
+
+        GET /api/v1/analytics/data-health/
+        Optional: ?run=true to trigger a new reconciliation.
+        """
+        if request.query_params.get("run", "").lower() in ("true", "1"):
+            from analytics.etl.pipeline import run_reconciliation
+            log = run_reconciliation(triggered_by="manual")
+        else:
+            log = DataReconciliationLog.objects.first()
+
+        # Database summary counts
+        summary = {
+            "total_matches": Match.objects.count(),
+            "total_teams": Team.objects.count(),
+            "total_players": Player.objects.count(),
+            "total_leagues": League.objects.count(),
+            "total_elo_ratings": TeamEloRating.objects.count(),
+        }
+
+        # Latest import info
+        latest_import = DataImportLog.objects.first()
+        import_info = None
+        if latest_import:
+            import_info = {
+                "status": latest_import.status,
+                "year": latest_import.year,
+                "matches_created": latest_import.matches_created,
+                "started_at": latest_import.started_at.isoformat() if latest_import.started_at else None,
+            }
+
+        # Reconciliation info
+        reconciliation_info = None
+        if log:
+            reconciliation_info = {
+                "status": log.status,
+                "total_checks": log.total_checks,
+                "passed": log.passed_checks,
+                "warnings": log.warning_checks,
+                "failed": log.failed_checks,
+                "triggered_by": log.triggered_by,
+                "started_at": log.started_at.isoformat() if log.started_at else None,
+                "completed_at": log.completed_at.isoformat() if log.completed_at else None,
+                "results": log.results,
+            }
+
+        return Response({
+            "summary": summary,
+            "latest_import": import_info,
+            "reconciliation": reconciliation_info,
+        })

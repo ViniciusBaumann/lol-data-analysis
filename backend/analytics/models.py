@@ -662,3 +662,77 @@ class LiveMatchSnapshot(models.Model):
 
     def __str__(self) -> str:
         return f"{self.blue_team_code} vs {self.red_team_code} ({self.esports_game_id})"
+
+
+class DataReconciliationLog(models.Model):
+    """Registro de execucao de reconciliacao e qualidade de dados."""
+
+    STATUS_CHOICES = [
+        ("running", "Em Execucao"),
+        ("healthy", "Saudavel"),
+        ("warnings", "Avisos"),
+        ("errors", "Erros"),
+        ("failed", "Falhou"),
+    ]
+
+    TRIGGER_CHOICES = [
+        ("manual", "Manual"),
+        ("scheduler", "Agendado"),
+        ("auto_update", "Auto-update"),
+        ("pipeline", "Pipeline ETL"),
+    ]
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="running",
+        verbose_name="Status",
+    )
+    triggered_by = models.CharField(
+        max_length=20,
+        choices=TRIGGER_CHOICES,
+        default="manual",
+        verbose_name="Disparado por",
+    )
+    total_checks = models.IntegerField(
+        default=0,
+        verbose_name="Total de Verificacoes",
+    )
+    passed_checks = models.IntegerField(
+        default=0,
+        verbose_name="Verificacoes OK",
+    )
+    warning_checks = models.IntegerField(
+        default=0,
+        verbose_name="Avisos",
+    )
+    failed_checks = models.IntegerField(
+        default=0,
+        verbose_name="Falhas",
+    )
+    results = models.JSONField(
+        default=dict,
+        verbose_name="Resultados Detalhados",
+        help_text="JSON com resultados de cada verificacao.",
+    )
+    started_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Iniciado em",
+    )
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Concluido em",
+    )
+
+    class Meta:
+        verbose_name = "Log de Reconciliacao"
+        verbose_name_plural = "Logs de Reconciliacao"
+        ordering = ["-started_at"]
+
+    def __str__(self) -> str:
+        return (
+            f"Reconciliacao {self.get_status_display()} - "
+            f"{self.passed_checks}/{self.total_checks} OK "
+            f"({self.started_at:%Y-%m-%d %H:%M})"
+        )

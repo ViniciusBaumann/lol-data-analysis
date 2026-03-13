@@ -30,7 +30,7 @@ def get_scheduler():
 
 
 def scheduled_update_job():
-    """Job that runs the Oracle's Elixir data update."""
+    """Job that runs the Oracle's Elixir data update + reconciliation."""
     from analytics.auto_update import auto_update_oracle_data
 
     logger.info("=" * 60)
@@ -42,6 +42,17 @@ def scheduled_update_job():
         logger.info("Scheduled update completed successfully")
     except Exception as e:
         logger.exception("Scheduled update failed: %s", e)
+
+    # Run reconciliation after import
+    try:
+        from analytics.etl.pipeline import run_reconciliation
+        log = run_reconciliation(triggered_by="scheduler")
+        logger.info(
+            "Scheduled reconciliation: %s (%d/%d passed)",
+            log.status, log.passed_checks, log.total_checks,
+        )
+    except Exception as e:
+        logger.exception("Scheduled reconciliation failed: %s", e)
 
 
 def start_scheduler():

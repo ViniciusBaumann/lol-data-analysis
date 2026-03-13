@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from .models import (
     DataImportLog,
+    DataReconciliationLog,
     League,
     Match,
     Player,
@@ -148,4 +149,12 @@ class DataImportLogSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DataImportLog
+        fields = "__all__"
+
+
+class DataReconciliationLogSerializer(serializers.ModelSerializer):
+    """Serializer for DataReconciliationLog model."""
+
+    class Meta:
+        model = DataReconciliationLog
         fields = "__all__"
